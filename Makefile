@@ -8,7 +8,7 @@ CC=${CROSSCOMPILE}gcc
 LD=${CROSSCOMPILE}ld
 OBJCOPY=${CROSSCOMPILE}objcopy
 OBJDUMP=${CROSSCOMPILE}objdump
-CFLAGS=-I. -O2 -ggdb -march=rv64imafdc -mabi=lp64d -Wall -mcmodel=medany -mexplicit-relocs
+CFLAGS=-I. -Ilib/ -O2 -ggdb -march=rv64imafdc -mabi=lp64d -Wall -mcmodel=medany -mexplicit-relocs
 CCASFLAGS=-I. -mcmodel=medany -mexplicit-relocs
 LDFLAGS=-nostdlib -nostartfiles
 
@@ -40,7 +40,14 @@ LIB_FS_O= \
 	lib/strcmp.o \
 	lib/strlen.o \
 	fsbl/dtb.o \
-	
+	lib/sha3/sha3.o \
+	lib/ed25519/fe.o \
+	lib/ed25519/ge.o \
+	lib/ed25519/keypair.o \
+	lib/ed25519/sc.o \
+	lib/ed25519/sign.o \
+	lib/ed25519/verify.o
+
 
 H=$(wildcard *.h */*.h)
 
