@@ -170,7 +170,7 @@ int main(int id, unsigned long dtb)
   // If tlclksel is set for 2:1 operation,
   // Set corepll 33Mhz -> 1GHz
   // Otherwise, set corepll 33MHz -> 500MHz.
-  
+
   if (UX00PRCI_REG(UX00PRCI_CLKMUXSTATUSREG) & CLKMUX_STATUS_TLCLKSEL){
     nsec_per_cyc = 2;
     peripheral_input_khz = 500000; // peripheral_clk = tlclk
@@ -182,12 +182,12 @@ int main(int id, unsigned long dtb)
     nsec_per_cyc = 1;
     peripheral_input_khz = (1000000 / 2); // peripheral_clk = tlclk
     update_peripheral_clock_dividers(peripheral_input_khz);
-    
+
     ux00prci_select_corepll_1GHz(&UX00PRCI_REG(UX00PRCI_CORECLKSELREG),
                                  &UX00PRCI_REG(UX00PRCI_COREPLLCFG),
                                  &UX00PRCI_REG(UX00PRCI_COREPLLOUT));
   }
-  
+
   //
   //DDR init
   //
@@ -220,11 +220,11 @@ int main(int id, unsigned long dtb)
   for (int i = 0; i < 256; i++){
     asm volatile ("nop");
   }
-  
+
   ux00ddr_writeregmap(UX00DDR_CTRL_ADDR,ddr_ctl_settings,ddr_phy_settings);
   ux00ddr_disableaxireadinterleave(UX00DDR_CTRL_ADDR);
 
-  ux00ddr_disableoptimalrmodw(UX00DDR_CTRL_ADDR);  
+  ux00ddr_disableoptimalrmodw(UX00DDR_CTRL_ADDR);
 
   ux00ddr_enablewriteleveling(UX00DDR_CTRL_ADDR);
   ux00ddr_enablereadleveling(UX00DDR_CTRL_ADDR);
@@ -243,8 +243,8 @@ int main(int id, unsigned long dtb)
   const uint64_t ddr_end = PAYLOAD_DEST + ddr_size;
   ux00ddr_start(UX00DDR_CTRL_ADDR, PHYSICAL_FILTER_CTRL_ADDR, ddr_end);
 
-  ux00ddr_phy_fixup(UX00DDR_CTRL_ADDR); 
-  
+  ux00ddr_phy_fixup(UX00DDR_CTRL_ADDR);
+
   //
   //GEMGXL init
   //
@@ -313,7 +313,7 @@ int main(int id, unsigned long dtb)
   // Post the serial number and build info
   extern const char * gitid;
   UART0_REG(UART_REG_TXCTRL) = UART_TXEN;
-  
+
   puts("\r\nSiFive FSBL:       ");
   puts(date);
   puts("-");
@@ -397,7 +397,7 @@ int main(int id, unsigned long dtb)
 
   slave_main(0, dtb);
 
-  //dead code 
+  //dead code
   return 0;
 }
 
@@ -406,7 +406,7 @@ typedef unsigned char byte;
 // Sanctum header fields in DRAM
 extern byte sanctum_dev_public_key[32];
 extern byte sanctum_dev_secret_key[64];
-unsigned int sanctum_sm_size = 0x2ff000;
+unsigned int sanctum_sm_size = 0x1ff000;
 extern byte sanctum_sm_hash[64];
 extern byte sanctum_sm_public_key[32];
 extern byte sanctum_sm_secret_key[64];
@@ -449,7 +449,7 @@ void secure_boot_main(){
      keypair */
   // TEST Device key
   #include "use_test_keys.h"
-  
+
   // Derive {SK_D, PK_D} (device keys) from a 32 B random seed
   //ed25519_create_keypair(sanctum_dev_public_key, sanctum_dev_secret_key, scratchpad);
 
