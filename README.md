@@ -15,9 +15,9 @@ Remember to export the riscv64gc-elf-toolchain to path, and make:
 	
 After this, the vc707zsbl.hex and vc707fsbl.bin will appear.
 
-The vc707zsbl.hex is used in rom.v (it is the bootrom inside hardware).
+The vc707zsbl.hex is used in rom.v (it is the bootrom inside hardware) under the folder builds/vc707-u500devkit/
 
-You can write the vc707fsbl.bin to the 4th partition of the sd card
+For the vc707fsbl.bin, you can write it to the 4th partition of the sd card
 
 	$ sudo dd if=vc707fsbl.bin of=/dev/sdX4 bs=4096 conv=fsync
 	where X4 is the partition 4 of the USB device
