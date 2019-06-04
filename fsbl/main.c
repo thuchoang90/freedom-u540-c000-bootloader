@@ -3,16 +3,21 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* See the file LICENSE for further information */
 
+#include "board.h"
+
 #include "encoding.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdatomic.h>
 #include "fdt/fdt.h"
-#include <ememoryotp/ememoryotp.h>
 #include <uart/uart.h>
 #include <stdio.h>
-
+#ifndef vc707
+  #include <ememoryotp/ememoryotp.h>
+#else
+  #include "tl_clock.h"
+#endif
 #include "regconfig-ctl.h"
 #include "regconfig-phy.h"
 #include "fsbl/ux00ddr.h"
@@ -21,7 +26,8 @@
 #define DENALI_CTL_DATA ddr_ctl_settings
 #include "ddrregs.h"
 
-#define DDR_SIZE  (8UL * 1024UL * 1024UL * 1024UL)
+#define DDR_ADDR  MEMORY_MEM_ADDR
+#define DDR_SIZE  MEMORY_MEM_SIZE /*this needs to get from the platform.h*/
 #define DDRCTLPLL_F 55
 #define DDRCTLPLL_Q 2
 
@@ -38,8 +44,6 @@
 #include "lib/sha3/sha3.h"
 #include "lib/ed25519/ed25519.h"
 
-#define NUM_CORES 5
-
 #ifndef PAYLOAD_DEST
   #define PAYLOAD_DEST MEMORY_MEM_ADDR
 #endif
@@ -54,6 +58,14 @@
   #define SPI_MEM_ADDR _SPI_MEM_ADDR(SPI_NUM)
 #endif
 
+#ifdef vc707
+  #ifdef TL_CLK
+    #define F_CLK TL_CLK/1000
+  #else
+    #error Must define TL_CLK
+  #endif
+#endif
+
 Barrier barrier = { {0, 0}, {0, 0}, 0}; // bss initialization is done by main core while others do wfi
 
 extern const gpt_guid gpt_guid_sifive_bare_metal;
@@ -62,6 +74,7 @@ unsigned int serial_to_burn = ~0;
 
 uint32_t __attribute__((weak)) own_dtb = 42; // not 0xedfe0dd0 the DTB magic
 
+#ifndef vc707
 static const uintptr_t i2c_devices[] = {
   I2C_CTRL_ADDR,
 };
@@ -76,10 +89,9 @@ static const uintptr_t uart_devices[] = {
   UART0_CTRL_ADDR,
   UART1_CTRL_ADDR,
 };
+#endif
 
-
-void handle_trap(uintptr_t sp)
-{
+void handle_trap(uintptr_t sp) {
   ux00boot_fail((long) read_csr(mcause), 1);
   asm volatile ("nop");
   asm volatile ("nop");
@@ -87,15 +99,14 @@ void handle_trap(uintptr_t sp)
   asm volatile ("nop");
 }
 
-
 int slave_main(int id, unsigned long dtb);
 void secure_boot_main();
 
 /**
  * Scale peripheral clock dividers before changing core PLL.
  */
-void update_peripheral_clock_dividers(unsigned int peripheral_input_khz)
-{
+#ifndef vc707
+void update_peripheral_clock_dividers(unsigned int peripheral_input_khz) {
   unsigned int i2c_target_khz = 400;
   uint16_t prescaler = i2c_min_clk_prescaler(peripheral_input_khz, i2c_target_khz);
   for (size_t i = 0; i < sizeof(i2c_devices) / sizeof(i2c_devices[0]); i++) {
@@ -121,24 +132,28 @@ void nsleep(long nsec) {
   long step = nsec_per_cyc*2; // 2 instructions per loop iteration
   while (nsec > 0) nsec -= step;
 }
+#endif
 
-int puts(const char * str){
+int puts(const char * str) {
 	uart_puts((void *) UART0_CTRL_ADDR, str);
 	return 1;
 }
 
 //HART 0 runs main
-
-int main(int id, unsigned long dtb)
-{
+int main(int id, unsigned long dtb) {
   // PRCI init
-
   // Initialize UART divider for 33MHz core clock in case if trap is taken prior
   // to core clock bump.
+#ifndef vc707
   unsigned long long uart_target_hz = 115200ULL;
   const uint32_t initial_core_clk_khz = 33000;
   unsigned long peripheral_input_khz;
-  if (UX00PRCI_REG(UX00PRCI_CLKMUXSTATUSREG) & CLKMUX_STATUS_TLCLKSEL){
+#else
+  unsigned long peripheral_input_khz = F_CLK;
+#endif
+
+#ifndef vc707
+  if (UX00PRCI_REG(UX00PRCI_CLKMUXSTATUSREG) & CLKMUX_STATUS_TLCLKSEL) {
     peripheral_input_khz = initial_core_clk_khz;
   } else {
     peripheral_input_khz = initial_core_clk_khz / 2;
@@ -191,7 +206,6 @@ int main(int id, unsigned long dtb)
   //
   //DDR init
   //
-
   uint32_t ddrctlmhz =
     (PLL_R(0)) |
     (PLL_F(DDRCTLPLL_F)) |
@@ -238,17 +252,18 @@ int main(int id, unsigned long dtb)
   ux00ddr_mask_outofrange_interrupts(UX00DDR_CTRL_ADDR);
   ux00ddr_setuprangeprotection(UX00DDR_CTRL_ADDR,DDR_SIZE);
   ux00ddr_mask_port_command_error_interrupt(UX00DDR_CTRL_ADDR);
+#endif
 
   const uint64_t ddr_size = DDR_SIZE;
   const uint64_t ddr_end = PAYLOAD_DEST + ddr_size;
-  ux00ddr_start(UX00DDR_CTRL_ADDR, PHYSICAL_FILTER_CTRL_ADDR, ddr_end);
 
+#ifndef vc707
+  ux00ddr_start(UX00DDR_CTRL_ADDR, PHYSICAL_FILTER_CTRL_ADDR, ddr_end);
   ux00ddr_phy_fixup(UX00DDR_CTRL_ADDR);
 
   //
   //GEMGXL init
   //
-
   uint32_t gemgxl125mhz =
     (PLL_R(0)) |
     (PLL_F(59)) |  /*4000Mhz VCO*/
@@ -272,7 +287,6 @@ int main(int id, unsigned long dtb)
 
 //#ifdef VSC8541_PHY
 #define PHY_NRESET 0x1000
-
   // VSC8541 PHY reset sequence; leave pull-down active for 2ms
   nsleep(2000000);
   // Set GPIO 12 (PHY NRESET) to OE=1 and OVAL=1
@@ -285,12 +299,13 @@ int main(int id, unsigned long dtb)
   atomic_fetch_or(&GPIO_REG(GPIO_OUTPUT_VAL), PHY_NRESET);
   nsleep(15000000);
 //#endif
-
   // Procmon => core clock
   UX00PRCI_REG(UX00PRCI_PROCMONCFG) = 0x1 << 24;
+#endif
 
   // Copy the DTB and reduce the reported memory to match DDR
   dtb_target = ddr_end - 0x200000; // - 2MB
+
 #ifndef SKIP_DTB_DDR_RANGE
 #define DEQ(mon, x) ((cdate[0] == mon[0] && cdate[1] == mon[1] && cdate[2] == mon[2]) ? x : 0)
 
@@ -313,14 +328,15 @@ int main(int id, unsigned long dtb)
   // Post the serial number and build info
   extern const char * gitid;
   UART0_REG(UART_REG_TXCTRL) = UART_TXEN;
-
   puts("\r\nSiFive FSBL:       ");
   puts(date);
   puts("-");
   puts(gitid);
+
   // If chiplink is connected and has a DTB, use that DTB instead of what we have
   // compiled-in. This will be replaced with a real bootloader with overlays in
   // the future
+#ifndef vc707
   uint32_t *chiplink_dtb = (uint32_t*)0x2ff0000000UL;
   if (*chiplink_dtb == 0xedfe0dd0){
 	dtb = (uintptr_t)chiplink_dtb;
@@ -329,6 +345,11 @@ int main(int id, unsigned long dtb)
 	dtb = (uintptr_t)&own_dtb;
 	puts("\r\nUsing FSBL DTB");
   }
+#else
+  dtb = (uintptr_t)&own_dtb;
+  puts("\r\nUsing FSBL DTB");
+#endif
+
   memcpy((void*)dtb_target, (void*)dtb, fdt_size(dtb));
   fdt_reduce_mem(dtb_target, ddr_size); // reduce the RAM to physically present only
   fdt_set_prop(dtb_target, "sifive,fsbl", (uint8_t*)&date[0]);
@@ -337,6 +358,7 @@ int main(int id, unsigned long dtb)
 #define FIRST_SLOT	0xfe
 #define LAST_SLOT	0x80
 
+#ifndef vc707
   unsigned int serial = ~0;
   int serial_slot;
   ememory_otp_power_up_sequence();
@@ -373,28 +395,28 @@ int main(int id, unsigned long dtb)
     uart_puts(uart, "Resuming boot\r\n");
     serial = serial_to_burn;
   }
-
   ememory_otp_power_down_sequence();
+#endif
 
   // SiFive MA-S MAC block; default to serial 0
   unsigned char mac[6] = { 0x70, 0xb3, 0xd5, 0x92, 0xf0, 0x00 };
+#ifndef vc707
   if (serial != ~0) {
     mac[5] |= (serial >>  0) & 0xff;
     mac[4] |= (serial >>  8) & 0xff;
     mac[3] |= (serial >> 16) & 0xff;
   }
+#endif
   fdt_set_prop(dtb_target, "local-mac-address", &mac[0]);
 #endif
-  uart_puts(uart, "\r\n");
+  puts("\r\n");
 #endif
 
   puts("Loading boot payload");
   ux00boot_load_gpt_partition((void*) PAYLOAD_DEST, &gpt_guid_sifive_bare_metal, peripheral_input_khz);
 
   puts("\r\n\n");
-
   secure_boot_main();
-
   slave_main(0, dtb);
 
   //dead code
@@ -411,7 +433,6 @@ extern byte sanctum_sm_hash[64];
 extern byte sanctum_sm_public_key[32];
 extern byte sanctum_sm_secret_key[64];
 extern byte sanctum_sm_signature[64];
-#define DRAM_BASE 0x80000000
 
 /* Update this to generate valid entropy for target platform*/
 inline byte random_byte(unsigned int i) {
@@ -419,8 +440,7 @@ inline byte random_byte(unsigned int i) {
   return 0xac + (0xdd ^ i);
 }
 
-
-void secure_boot_main(){
+void secure_boot_main() {
   //*sanctum_sm_size = 0x200;
   // Reserve stack space for secrets
   byte scratchpad[128];
@@ -455,7 +475,7 @@ void secure_boot_main(){
 
   // Measure SM
   sha3_init(&hash_ctx, 64);
-  sha3_update(&hash_ctx, (void*)DRAM_BASE, sanctum_sm_size);
+  sha3_update(&hash_ctx, (void*)DDR_ADDR, sanctum_sm_size);
   sha3_final(sanctum_sm_hash, &hash_ctx);
 
   // Combine SK_D and H_SM via a hash
@@ -485,9 +505,7 @@ void secure_boot_main(){
   HARTs 1..5 run slave_main
   slave_main is a weak symbol in crt.S
 */
-
-int slave_main(int id, unsigned long dtb)
-{
+int slave_main(int id, unsigned long dtb) {
   // Wait for the DTB location to become known
   while (!dtb_target) {}
 
@@ -502,7 +520,9 @@ int slave_main(int id, unsigned long dtb)
 #endif
   // These next two guys must get inlined and not spill a0+a1 or it is broken!
   Barrier_Wait(&barrier, NUM_CORES);
+#ifndef vc707
   ccache_enable_ways(CCACHE_CTRL_ADDR,14);
+#endif
   asm volatile ("unimp" : : "r"(a0), "r"(a1));
 
   return 0;

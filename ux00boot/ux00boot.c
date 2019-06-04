@@ -3,6 +3,8 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* See the file LICENSE for further information */
 
+#include "board.h"
+
 #include <stdatomic.h>
 #include <string.h>
 #include <encoding.h>
@@ -70,6 +72,7 @@
 // Mode Select helpers
 //==============================================================================
 
+#ifndef vc707
 typedef enum {
   UX00BOOT_ROUTINE_FLASH,  // Use SPI commands to read from flash one byte at a time
   UX00BOOT_ROUTINE_MMAP,  // Read from memory-mapped SPI region
@@ -200,7 +203,7 @@ static ux00boot_routine get_boot_routine(uint32_t mode_select)
 #endif
   return boot_routine;
 }
-
+#endif
 
 //==============================================================================
 // UX00 boot routine functions
@@ -299,7 +302,7 @@ static int load_sd_gpt_partition(spi_ctrl* spictrl, void* dst, const gpt_guid* p
   return 0;
 }
 
-
+#ifndef vc707
 //------------------------------------------------------------------------------
 // SPI flash
 //------------------------------------------------------------------------------
@@ -462,7 +465,7 @@ static int load_spiflash_gpt_partition(spi_ctrl* spictrl, void* dst, const gpt_g
   if (error) return ERROR_CODE_SPI_COPY_FAILED;
   return 0;
 }
-
+#endif
 
 void ux00boot_fail(long code, int trap)
 {
@@ -515,10 +518,10 @@ void ux00boot_fail(long code, int trap)
  */
 void ux00boot_load_gpt_partition(void* dst, const gpt_guid* partition_type_guid, unsigned int peripheral_input_khz)
 {
+#ifndef vc707
   uint32_t mode_select = *((volatile uint32_t*) MODESELECT_MEM_ADDR);
-
-  spi_ctrl* spictrl = NULL;
   void* spimem = NULL;
+  spi_ctrl* spictrl = NULL;
 
   int spi_device = get_boot_spi_device(mode_select);
   ux00boot_routine boot_routine = get_boot_routine(mode_select);
@@ -540,9 +543,13 @@ void ux00boot_load_gpt_partition(void* dst, const gpt_guid* partition_type_guid,
       ux00boot_fail(ERROR_CODE_UNHANDLED_SPI_DEVICE, 0);
       break;
   }
+#else
+  spi_ctrl* spictrl = (spi_ctrl*) SPI0_CTRL_ADDR;
+#endif
 
   unsigned int error = 0;
 
+#ifndef vc707
   switch (boot_routine)
   {
     case UX00BOOT_ROUTINE_FLASH:
@@ -561,7 +568,7 @@ void ux00boot_load_gpt_partition(void* dst, const gpt_guid* partition_type_guid,
     case UX00BOOT_ROUTINE_SDCARD_NO_INIT:
       {
         int skip_sd_init_commands = (boot_routine == UX00BOOT_ROUTINE_SDCARD) ? 0 : 1;
-        error = initialize_sd(spictrl, peripheral_input_khz, skip_sd_init_commands);
+	error = initialize_sd(spictrl, peripheral_input_khz, skip_sd_init_commands);
         if (!error) error = load_sd_gpt_partition(spictrl, dst, partition_type_guid);
       }
       break;
@@ -569,6 +576,10 @@ void ux00boot_load_gpt_partition(void* dst, const gpt_guid* partition_type_guid,
       error = ERROR_CODE_UNHANDLED_BOOT_ROUTINE;
       break;
   }
+#else
+  error = initialize_sd(spictrl, peripheral_input_khz, 0);
+  if (!error) error = load_sd_gpt_partition(spictrl, dst, partition_type_guid);
+#endif
 
   if (error) {
     ux00boot_fail(error, 0);
