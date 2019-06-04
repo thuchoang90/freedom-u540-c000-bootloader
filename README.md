@@ -1,10 +1,14 @@
+Modified from https://github.com/keystone-enclave/freedom-u540-c000-bootloader to work with the VC707 FPGA board.
 
-This is a fork of the u540 bootloader to support chain-of-trust secure
-boot on the HiFive Unleashed development board.
+Now you can type:
 
-Additional packages required
+	$ make vc707
 
-device-tree-compiler
+to make the vc707zsbl.hex and vc707fsbl.bin for the VC707 FPGA board.
 
-See Keystone documentation for details
-(http://docs.keystone-enclave.org/en/dev/)
+The vc707zsbl.hex is used in rom.v (it is the bootrom inside hardware).
+The vc707fsbl.bin is copied to the 4th partition of the sd card.
+
+To make this work, you have to copy this repo to under the folder of freedom/bootrom/
+
+Note: the normal make is still kept by the command $ make
