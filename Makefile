@@ -82,7 +82,7 @@ $(clk): $(dts)
 	awk '/tlclk {/ && !f{f=1; next}; f && match($$0, /^.*clock-frequency.*<(.*)>.*/, arr) { print "#define TL_CLK " arr[1] "UL"}' $< > $@.tmp
 	mv $@.tmp $@
 
-lib/version.c: .git/HEAD .git/index
+lib/version.c:
 	echo "const char *gitid = \"$(shell git describe --always --dirty)\";" > lib/version.c
 	echo "const char *gitdate = \"$(shell git log -n 1 --date=short --format=format:"%ad.%h" HEAD)\";" >> lib/version.c
 	echo "const char *gitversion = \"$(shell git rev-parse HEAD)\";" >> lib/version.c
