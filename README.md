@@ -1,4 +1,4 @@
-Modified from https://github.com/keystone-enclave/freedom-u540-c000-bootloader to work with the VC707 FPGA board.
+Modified from [KeyStone-encalve](https://github.com/keystone-enclave/freedom-u540-c000-bootloader) to work with the VC707 FPGA board.
 
 From your VC707 hardware project folder:
 
