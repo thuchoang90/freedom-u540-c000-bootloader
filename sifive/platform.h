@@ -15,6 +15,7 @@
 #include "sifive/devices/i2c.h"
 #include "sifive/devices/spi.h"
 #include "sifive/devices/uart.h"
+#include "sifive/devices/sha3.h"
 
 #ifdef vc707
   #include "tl_clock.h"
@@ -211,6 +212,8 @@
 #ifndef UART_CTRL_SIZE
   #define UART_CTRL_SIZE UART0_CTRL_SIZE
 #endif
+#define SHA3_CTRL_ADDR   _AC(0x64003000,UL)
+#define SHA3_CTRL_SIZE   _AC(0x1000,UL)
 
 // IOF masks
 
@@ -368,6 +371,7 @@
 #define SPI0_REG(offset) _REG32(SPI0_CTRL_ADDR, offset)
 #define TEST_REG(offset) _REG32(TEST_CTRL_ADDR, offset)
 #define UART0_REG(offset) _REG32(UART0_CTRL_ADDR, offset)
+#define SHA3_REG(offset) _REG32(SHA3_CTRL_ADDR, offset)
 #define CLINT_REG64(offset) _REG64(CLINT_CTRL_ADDR, offset)
 #define DEBUG_REG64(offset) _REG64(DEBUG_CTRL_ADDR, offset)
 #define ERROR_REG64(offset) _REG64(ERROR_CTRL_ADDR, offset)
@@ -378,6 +382,7 @@
 #define SPI0_REG64(offset) _REG64(SPI0_CTRL_ADDR, offset)
 #define TEST_REG64(offset) _REG64(TEST_CTRL_ADDR, offset)
 #define UART0_REG64(offset) _REG64(UART0_CTRL_ADDR, offset)
+#define SHA3_REG64(offset) _REG64(SHA3_CTRL_ADDR, offset)
 
 // Helpers for getting and setting individual bit fields, shifting the values
 // for you.

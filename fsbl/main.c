@@ -441,6 +441,10 @@ inline byte random_byte(unsigned int i) {
 }
 
 void secure_boot_main() {
+  void *uart = (void*)UART0_CTRL_ADDR;
+  uart_puts(uart, "Hello world, FSBL\r\n");
+  uart_put_hex(uart, SHA3_REG(SHA3_REG_MAGIC));
+  uart_puts(uart, "\r\n");
   //*sanctum_sm_size = 0x200;
   // Reserve stack space for secrets
   byte scratchpad[128];
