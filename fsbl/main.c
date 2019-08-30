@@ -440,15 +440,86 @@ inline byte random_byte(unsigned int i) {
   return 0xac + (0xdd ^ i);
 }
 
+void hwsha3_init() {
+  SHA3_REG(SHA3_REG_STATUS) = 1 << 24; // Reset, and also put 0 in size
+}
+
+void hwsha3_update(void* data, size_t size) {
+  uint64_t tmp;
+  byte* d = (byte*)data;
+  byte* t = (byte*)&tmp;
+  while(size >= 8) {
+    for(int i = 0; i < 8; i++) {
+      t[7-i] = d[i];
+    }
+    SHA3_REG64(SHA3_REG_DATA_0) = tmp;
+    SHA3_REG(SHA3_REG_STATUS) = 0;
+    SHA3_REG(SHA3_REG_STATUS) = 1 << 16;
+    size -= 8;
+    d += 8;
+  }
+  if(size > 0) {
+    for(int i = 0; i < size; i++) {
+      t[7-i] = d[i];
+    }
+    SHA3_REG64(SHA3_REG_DATA_0) = tmp;
+    SHA3_REG(SHA3_REG_STATUS) = size & 0x7;
+    SHA3_REG(SHA3_REG_STATUS) = 1 << 16;
+  }
+}
+
+void hwsha3_final(byte* hash, void* data, size_t size) {
+  uint64_t tmp;
+  byte* d = (byte*)data;
+  byte* t = (byte*)&tmp;
+  while(size >= 8) {
+    for(int i = 0; i < 8; i++) {
+      t[7-i] = d[i];
+    }
+    size -= 8;
+    SHA3_REG64(SHA3_REG_DATA_0) = tmp;
+    SHA3_REG(SHA3_REG_STATUS) = 0;
+    SHA3_REG(SHA3_REG_STATUS) = size?(1 << 16):(3 << 16);
+    d += 8;
+  }
+  if(size > 0) {
+    for(int i = 0; i < size; i++) {
+      t[7-i] = d[i];
+    }
+    SHA3_REG64(SHA3_REG_DATA_0) = tmp;
+    SHA3_REG(SHA3_REG_STATUS) = size & 0x7;
+    SHA3_REG(SHA3_REG_STATUS) = 3 << 16;
+  }
+  while(SHA3_REG(SHA3_REG_STATUS) & (1 << 10));
+  for(int i = 0; i < 16; i++) {
+    *(((uint32_t*)hash) + i) = *(((uint32_t*)(SHA3_CTRL_ADDR+SHA3_REG_HASH_0)) + i);
+  }
+}
+
 void secure_boot_main() {
-  void *uart = (void*)UART0_CTRL_ADDR;
-  uart_puts(uart, "Hello world, FSBL\r\n");
-  uart_put_hex(uart, SHA3_REG(SHA3_REG_MAGIC));
-  uart_puts(uart, "\r\n");
-  //*sanctum_sm_size = 0x200;
-  // Reserve stack space for secrets
   byte scratchpad[128];
   sha3_ctx_t hash_ctx;
+  void *uart = (void*)UART0_CTRL_ADDR;
+  uart_puts(uart, "Hello world, FSBL\r\n");
+  
+  // Test the hardware with the software SHA3
+  byte hash[64];
+  uint32_t* hs = (uint32_t*)hash;
+  sha3_init(&hash_ctx, 64);
+  sha3_update(&hash_ctx, (void*)"FOX1", 4);
+  sha3_final(hash, &hash_ctx);
+  for(int i = 0; i < 16; i++) 
+     uart_put_hex(uart, *(hs+i));
+  uart_puts(uart, "\r\n");
+    
+  hwsha3_init(&hash_ctx);
+  hwsha3_final(hash, (void*)"FOX1", 4);
+  for(int i = 0; i < 16; i++) 
+     uart_put_hex(uart, *(hs+i));
+  uart_puts(uart, "\r\n");
+  
+  //*sanctum_sm_size = 0x200;
+  // Reserve stack space for secrets
 
   // TODO: on real device, copy boot image from memory. In simulator, HTIF writes boot image
   // ... SD card to beginning of memory.
