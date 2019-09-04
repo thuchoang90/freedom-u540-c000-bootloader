@@ -491,8 +491,8 @@ void hwsha3_final(byte* hash, void* data, size_t size) {
     SHA3_REG(SHA3_REG_STATUS) = 3 << 16;
   }
   while(SHA3_REG(SHA3_REG_STATUS) & (1 << 10));
-  for(int i = 0; i < 16; i++) {
-    *(((uint32_t*)hash) + i) = *(((uint32_t*)(SHA3_CTRL_ADDR+SHA3_REG_HASH_0)) + i);
+  for(int i = 0; i < 64; i++) {
+    *(((uint8_t*)hash) + 63 - i) = *(((uint8_t*)(SHA3_CTRL_ADDR+SHA3_REG_HASH_0)) + i);
   }
 }
 
