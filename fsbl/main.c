@@ -445,54 +445,38 @@ void hwsha3_init() {
 }
 
 void hwsha3_update(void* data, size_t size) {
-  uint64_t tmp;
-  byte* d = (byte*)data;
-  byte* t = (byte*)&tmp;
+  uint64_t* d = (uint64_t*)data;
+  SHA3_REG(SHA3_REG_STATUS) = 0;
   while(size >= 8) {
-    for(int i = 0; i < 8; i++) {
-      t[7-i] = d[i];
-    }
-    SHA3_REG64(SHA3_REG_DATA_0) = tmp;
-    SHA3_REG(SHA3_REG_STATUS) = 0;
+    SHA3_REG64(SHA3_REG_DATA_0) = *d;
     SHA3_REG(SHA3_REG_STATUS) = 1 << 16;
     size -= 8;
-    d += 8;
+    d += 1;
   }
   if(size > 0) {
-    for(int i = 0; i < size; i++) {
-      t[7-i] = d[i];
-    }
-    SHA3_REG64(SHA3_REG_DATA_0) = tmp;
+    SHA3_REG64(SHA3_REG_DATA_0) = *d;
     SHA3_REG(SHA3_REG_STATUS) = size & 0x7;
     SHA3_REG(SHA3_REG_STATUS) = 1 << 16;
   }
 }
 
 void hwsha3_final(byte* hash, void* data, size_t size) {
-  uint64_t tmp;
-  byte* d = (byte*)data;
-  byte* t = (byte*)&tmp;
+  uint64_t* d = (uint64_t*)data;
+  SHA3_REG(SHA3_REG_STATUS) = 0;
   while(size >= 8) {
-    for(int i = 0; i < 8; i++) {
-      t[7-i] = d[i];
-    }
     size -= 8;
-    SHA3_REG64(SHA3_REG_DATA_0) = tmp;
-    SHA3_REG(SHA3_REG_STATUS) = 0;
+    SHA3_REG64(SHA3_REG_DATA_0) = *d;
     SHA3_REG(SHA3_REG_STATUS) = size?(1 << 16):(3 << 16);
-    d += 8;
+    d += 1;
   }
   if(size > 0) {
-    for(int i = 0; i < size; i++) {
-      t[7-i] = d[i];
-    }
-    SHA3_REG64(SHA3_REG_DATA_0) = tmp;
+    SHA3_REG64(SHA3_REG_DATA_0) = *d;
     SHA3_REG(SHA3_REG_STATUS) = size & 0x7;
     SHA3_REG(SHA3_REG_STATUS) = 3 << 16;
   }
   while(SHA3_REG(SHA3_REG_STATUS) & (1 << 10));
-  for(int i = 0; i < 64; i++) {
-    *(((uint8_t*)hash) + 63 - i) = *(((uint8_t*)(SHA3_CTRL_ADDR+SHA3_REG_HASH_0)) + i);
+  for(int i = 0; i < 8; i++) {
+    *(((uint64_t*)hash) + i) = *(((uint64_t*)(SHA3_CTRL_ADDR+SHA3_REG_HASH_0)) + i);
   }
 }
 
@@ -517,6 +501,8 @@ void secure_boot_main() {
   for(int i = 0; i < 16; i++) 
      uart_put_hex(uart, *(hs+i));
   uart_puts(uart, "\r\n");
+  
+  unsigned long start_mcycle = read_csr(mcycle);
   
   //*sanctum_sm_size = 0x200;
   // Reserve stack space for secrets
@@ -549,16 +535,21 @@ void secure_boot_main() {
   //ed25519_create_keypair(sanctum_dev_public_key, sanctum_dev_secret_key, scratchpad);
 
   // Measure SM
-  sha3_init(&hash_ctx, 64);
-  sha3_update(&hash_ctx, (void*)DDR_ADDR, sanctum_sm_size);
-  sha3_final(sanctum_sm_hash, &hash_ctx);
+  //sha3_init(&hash_ctx, 64);
+  //sha3_update(&hash_ctx, (void*)DDR_ADDR, sanctum_sm_size);
+  //sha3_final(sanctum_sm_hash, &hash_ctx);
+  hwsha3_init();
+  hwsha3_final(sanctum_sm_hash, (void*)DDR_ADDR, sanctum_sm_size);
 
   // Combine SK_D and H_SM via a hash
   // sm_key_seed <-- H(SK_D, H_SM), truncate to 32B
-  sha3_init(&hash_ctx, 64);
-  sha3_update(&hash_ctx, sanctum_dev_secret_key, sizeof(*sanctum_dev_secret_key));
-  sha3_update(&hash_ctx, sanctum_sm_hash, sizeof(*sanctum_sm_hash));
-  sha3_final(scratchpad, &hash_ctx);
+  //sha3_init(&hash_ctx, 64);
+  //sha3_update(&hash_ctx, sanctum_dev_secret_key, sizeof(*sanctum_dev_secret_key));
+  //sha3_update(&hash_ctx, sanctum_sm_hash, sizeof(*sanctum_sm_hash));
+  //sha3_final(scratchpad, &hash_ctx);
+  hwsha3_init();
+  hwsha3_update(sanctum_dev_secret_key, sizeof(*sanctum_dev_secret_key));
+  hwsha3_final(scratchpad, sanctum_sm_hash, sizeof(*sanctum_sm_hash));
   // Derive {SK_D, PK_D} (device keys) from the first 32 B of the hash (NIST endorses SHA512 truncation as safe)
   ed25519_create_keypair(sanctum_sm_public_key, sanctum_sm_secret_key, scratchpad);
 
@@ -571,7 +562,15 @@ void secure_boot_main() {
   // Clean up
   // Erase SK_D
   memset((void*)sanctum_dev_secret_key, 0, sizeof(*sanctum_sm_secret_key));
-
+  
+  // Measure the time
+  unsigned long delta_mcycle = read_csr(mcycle) - start_mcycle;
+  
+  unsigned long msecs = delta_mcycle/F_CLK;
+  uart_puts(uart, "Miliseconds signing: \r\n");
+  uart_put_hex(uart, delta_mcycle);
+  uart_puts(uart, "\r\n");
+  
   // caller will clean core state and memory (including the stack), and boot.
   return;
 }
