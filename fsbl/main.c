@@ -466,11 +466,11 @@ void hwsha3_final(byte* hash, void* data, size_t size) {
   while(size >= 8) {
     size -= 8;
     SHA3_REG64(SHA3_REG_DATA_0) = *d;
-    SHA3_REG(SHA3_REG_STATUS) = size?(1 << 16):(3 << 16);
+    SHA3_REG(SHA3_REG_STATUS) = 1 << 16;
     d += 1;
   }
-  if(size > 0) {
-    SHA3_REG64(SHA3_REG_DATA_0) = *d;
+  /*if(size > 0)*/ {
+    if(size > 0) SHA3_REG64(SHA3_REG_DATA_0) = *d;
     SHA3_REG(SHA3_REG_STATUS) = size & 0x7;
     SHA3_REG(SHA3_REG_STATUS) = 3 << 16;
   }
