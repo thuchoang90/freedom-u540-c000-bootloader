@@ -21,7 +21,7 @@
 #define DENALI_CTL_DATA ddr_ctl_settings
 #include "ddrregs.h"
 
-#define DDR_SIZE  (8UL * 1024UL * 1024UL * 1024UL)
+#define DDR_SIZE  MEMORY_MEM_SIZE
 #define DDRCTLPLL_F 55
 #define DDRCTLPLL_Q 2
 
@@ -38,7 +38,13 @@
 #include "lib/sha3/sha3.h"
 #include "lib/ed25519/ed25519.h"
 
+#ifndef FPGA
 #define NUM_CORES 5
+#else
+#define NUM_CORES 4
+#include "tl_clock.h"
+#define F_CLK TL_CLK/1000
+#endif
 
 #ifndef PAYLOAD_DEST
   #define PAYLOAD_DEST MEMORY_MEM_ADDR
@@ -62,6 +68,7 @@ unsigned int serial_to_burn = ~0;
 
 uint32_t __attribute__((weak)) own_dtb = 42; // not 0xedfe0dd0 the DTB magic
 
+#ifndef FPGA
 static const uintptr_t i2c_devices[] = {
   I2C_CTRL_ADDR,
 };
@@ -77,6 +84,7 @@ static const uintptr_t uart_devices[] = {
   UART1_CTRL_ADDR,
 };
 
+#endif
 
 void handle_trap(uintptr_t sp)
 {
@@ -94,6 +102,7 @@ void secure_boot_main();
 /**
  * Scale peripheral clock dividers before changing core PLL.
  */
+#ifndef FPGA
 void update_peripheral_clock_dividers(unsigned int peripheral_input_khz)
 {
   unsigned int i2c_target_khz = 400;
@@ -121,6 +130,7 @@ void nsleep(long nsec) {
   long step = nsec_per_cyc*2; // 2 instructions per loop iteration
   while (nsec > 0) nsec -= step;
 }
+#endif
 
 int puts(const char * str){
 	uart_puts((void *) UART0_CTRL_ADDR, str);
@@ -135,9 +145,15 @@ int main(int id, unsigned long dtb)
 
   // Initialize UART divider for 33MHz core clock in case if trap is taken prior
   // to core clock bump.
+#ifndef FPGA
   unsigned long long uart_target_hz = 115200ULL;
   const uint32_t initial_core_clk_khz = 33000;
   unsigned long peripheral_input_khz;
+#else
+  unsigned long peripheral_input_khz = F_CLK;
+#endif
+
+#ifndef FPGA
   if (UX00PRCI_REG(UX00PRCI_CLKMUXSTATUSREG) & CLKMUX_STATUS_TLCLKSEL){
     peripheral_input_khz = initial_core_clk_khz;
   } else {
@@ -238,9 +254,11 @@ int main(int id, unsigned long dtb)
   ux00ddr_mask_outofrange_interrupts(UX00DDR_CTRL_ADDR);
   ux00ddr_setuprangeprotection(UX00DDR_CTRL_ADDR,DDR_SIZE);
   ux00ddr_mask_port_command_error_interrupt(UX00DDR_CTRL_ADDR);
+#endif
 
   const uint64_t ddr_size = DDR_SIZE;
   const uint64_t ddr_end = PAYLOAD_DEST + ddr_size;
+#ifndef FPGA
   ux00ddr_start(UX00DDR_CTRL_ADDR, PHYSICAL_FILTER_CTRL_ADDR, ddr_end);
 
   ux00ddr_phy_fixup(UX00DDR_CTRL_ADDR);
@@ -288,6 +306,7 @@ int main(int id, unsigned long dtb)
 
   // Procmon => core clock
   UX00PRCI_REG(UX00PRCI_PROCMONCFG) = 0x1 << 24;
+#endif
 
   // Copy the DTB and reduce the reported memory to match DDR
   dtb_target = ddr_end - 0x200000; // - 2MB
@@ -321,6 +340,7 @@ int main(int id, unsigned long dtb)
   // If chiplink is connected and has a DTB, use that DTB instead of what we have
   // compiled-in. This will be replaced with a real bootloader with overlays in
   // the future
+#ifndef FPGA
   uint32_t *chiplink_dtb = (uint32_t*)0x2ff0000000UL;
   if (*chiplink_dtb == 0xedfe0dd0){
 	dtb = (uintptr_t)chiplink_dtb;
@@ -329,6 +349,11 @@ int main(int id, unsigned long dtb)
 	dtb = (uintptr_t)&own_dtb;
 	puts("\r\nUsing FSBL DTB");
   }
+#else
+  dtb = (uintptr_t)&own_dtb;
+  puts("\r\nUsing FSBL DTB");
+#endif
+
   memcpy((void*)dtb_target, (void*)dtb, fdt_size(dtb));
   fdt_reduce_mem(dtb_target, ddr_size); // reduce the RAM to physically present only
   fdt_set_prop(dtb_target, "sifive,fsbl", (uint8_t*)&date[0]);
@@ -337,6 +362,7 @@ int main(int id, unsigned long dtb)
 #define FIRST_SLOT	0xfe
 #define LAST_SLOT	0x80
 
+#ifndef FPGA
   unsigned int serial = ~0;
   int serial_slot;
   ememory_otp_power_up_sequence();
@@ -375,17 +401,20 @@ int main(int id, unsigned long dtb)
   }
 
   ememory_otp_power_down_sequence();
+#endif
 
   // SiFive MA-S MAC block; default to serial 0
   unsigned char mac[6] = { 0x70, 0xb3, 0xd5, 0x92, 0xf0, 0x00 };
+#ifndef FPGA
   if (serial != ~0) {
     mac[5] |= (serial >>  0) & 0xff;
     mac[4] |= (serial >>  8) & 0xff;
     mac[3] |= (serial >> 16) & 0xff;
   }
+#endif
   fdt_set_prop(dtb_target, "local-mac-address", &mac[0]);
 #endif
-  uart_puts(uart, "\r\n");
+  puts("\r\n");
 #endif
 
   puts("Loading boot payload");
@@ -502,7 +531,9 @@ int slave_main(int id, unsigned long dtb)
 #endif
   // These next two guys must get inlined and not spill a0+a1 or it is broken!
   Barrier_Wait(&barrier, NUM_CORES);
+#ifndef FPGA
   ccache_enable_ways(CCACHE_CTRL_ADDR,14);
+#endif
   asm volatile ("unimp" : : "r"(a0), "r"(a1));
 
   return 0;

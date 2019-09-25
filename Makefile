@@ -3,14 +3,23 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # See the file LICENSE for further information
 
+ifeq ($(BOARD),)
+FPGA_FLAG=
+else
+FPGA_FLAG=-DFPGA
+endif
+
 CROSSCOMPILE?=riscv64-unknown-elf-
 CC=${CROSSCOMPILE}gcc
 LD=${CROSSCOMPILE}ld
 OBJCOPY=${CROSSCOMPILE}objcopy
 OBJDUMP=${CROSSCOMPILE}objdump
-CFLAGS=-I. -Ilib/ -O2 -ggdb -march=rv64imafdc -mabi=lp64d -Wall -mcmodel=medany -mexplicit-relocs
+CFLAGS=-I. -Ilib/ -O2 -ggdb -march=rv64imafdc -mabi=lp64d -Wall -mcmodel=medany -mexplicit-relocs $(FPGA_FLAG)
 CCASFLAGS=-I. -mcmodel=medany -mexplicit-relocs
 LDFLAGS=-nostdlib -nostartfiles
+
+dts := $(BUILD_DIR)/$(CONFIG_PROJECT).$(CONFIG).dts
+clk := $(BUILD_DIR)/$(CONFIG_PROJECT).$(CONFIG).tl_clock.h
 
 # This is broken up to match the order in the original zsbl
 # clkutils.o is there to match original zsbl, may not be needed
@@ -29,7 +38,6 @@ LIB_FS_O= \
 	fsbl/start.o \
 	fsbl/main.o \
 	$(LIB_ZS1_O) \
-	ememoryotp/ememoryotp.o \
 	fsbl/ux00boot.o \
 	clkutils/clkutils.o \
 	gpt/gpt.o \
@@ -53,6 +61,14 @@ H=$(wildcard *.h */*.h)
 
 all: zsbl.bin fsbl.bin
 
+romgen: $(clk) FPGAzsbl.hex FPGAfsbl.bin
+	cp FPGAzsbl.hex $(BUILD_DIR)/
+	$(rocketchip_dir)/scripts/vlsi_rom_gen $(ROMCONF) $(BUILD_DIR)/FPGAzsbl.hex > $(BUILD_DIR)/rom.v
+
+$(clk): $(dts)
+	awk '/tlclk {/ && !f{f=1; next}; f && match($$0, /^.*clock-frequency.*<(.*)>.*/, arr) { print "#define TL_CLK " arr[1] "UL"}' $< > tl_clock.h
+	cp tl_clock.h $@
+
 elf: zsbl.elf fsbl.elf
 
 asm: zsbl.asm fsbl.asm
@@ -69,6 +85,8 @@ zsbl/ux00boot.o: ux00boot/ux00boot.c
 zsbl.elf: zsbl/start.o zsbl/main.o $(LIB_ZS1_O) zsbl/ux00boot.o $(LIB_ZS2_O) memory.lds ux00_zsbl.lds
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(filter %.o,$^) $(patsubst %, -T%, $(filter %.lds,$^))
 
+FPGAzsbl.elf: zsbl/start.o zsbl/main.o $(LIB_ZS1_O) zsbl/ux00boot.o $(LIB_ZS2_O) memory_fpga.lds ux00_zsbl.lds
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(filter %.o,$^) $(patsubst %, -T%, $(filter %.lds,$^))
 
 fsbl/ux00boot.o: ux00boot/ux00boot.c
 	$(CC) $(CFLAGS) -DUX00BOOT_BOOT_STAGE=1 -c -o $@ $^
@@ -76,6 +94,8 @@ fsbl/ux00boot.o: ux00boot/ux00boot.c
 fsbl.elf: $(LIB_FS_O) ememoryotp/ememoryotp.o memory.lds ux00_fsbl.lds
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(filter %.o,$^) $(patsubst %, -T%, $(filter %.lds,$^))
 
+FPGAfsbl.elf: $(LIB_FS_O) memory_fpga.lds ux00_fsbl.lds
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(filter %.o,$^) $(patsubst %, -T%, $(filter %.lds,$^))
 
 fsbl/dtb.o: fsbl/ux00_fsbl.dtb
 
@@ -88,13 +108,25 @@ zsbl/start.o: zsbl/ux00_zsbl.dtb
 	$(OBJDUMP) -S $^ > $@
 
 %.dtb: %.dts
+ifeq ($(BOARD),)
 	dtc $^ -o $@ -O dtb
+else
+	dtc $(dts) -o $@ -O dtb
+endif
 
 %.o: %.S
+ifeq ($(BOARD),)
 	$(CC) $(CFLAGS) $(CCASFLAGS) -c $< -o $@
+else
+	$(CC) $(CFLAGS) $(CCASFLAGS) -DSKIP_ECC_WIPEDOWN -c $< -o $@
+endif
 
 %.o: %.c $(H)
 	$(CC) $(CFLAGS) -o $@ -c $<
 
+%.hex: %.bin
+	od -t x4 -An -w4 -v $< > $@
+
 clean::
 	rm -f */*.o */*.dtb zsbl.bin zsbl.elf zsbl.asm fsbl.bin fsbl.elf fsbl.asm lib/version.c
+	rm -f FPGAzsbl.bin FPGAzsbl.elf FPGAzsbl.hex FPGAfsbl.bin FPGAfsbl.elf tl_clock.h $(clk)
