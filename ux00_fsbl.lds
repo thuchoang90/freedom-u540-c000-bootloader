@@ -6,8 +6,6 @@
 OUTPUT_ARCH("riscv")
 ENTRY(_prog_start)
 
-INCLUDE memory.lds
-
 INCLUDE sanctum_params.lds
 
 PHDRS
