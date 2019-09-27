@@ -70,6 +70,7 @@
 // Mode Select helpers
 //==============================================================================
 
+#ifndef FPGA
 typedef enum {
   UX00BOOT_ROUTINE_FLASH,  // Use SPI commands to read from flash one byte at a time
   UX00BOOT_ROUTINE_MMAP,  // Read from memory-mapped SPI region
@@ -201,6 +202,7 @@ static ux00boot_routine get_boot_routine(uint32_t mode_select)
   return boot_routine;
 }
 
+#endif
 
 //==============================================================================
 // UX00 boot routine functions
@@ -300,6 +302,7 @@ static int load_sd_gpt_partition(spi_ctrl* spictrl, void* dst, const gpt_guid* p
 }
 
 
+#ifndef FPGA
 //------------------------------------------------------------------------------
 // SPI flash
 //------------------------------------------------------------------------------
@@ -463,6 +466,7 @@ static int load_spiflash_gpt_partition(spi_ctrl* spictrl, void* dst, const gpt_g
   return 0;
 }
 
+#endif
 
 void ux00boot_fail(long code, int trap)
 {
@@ -515,6 +519,7 @@ void ux00boot_fail(long code, int trap)
  */
 void ux00boot_load_gpt_partition(void* dst, const gpt_guid* partition_type_guid, unsigned int peripheral_input_khz)
 {
+#ifndef FPGA
   uint32_t mode_select = *((volatile uint32_t*) MODESELECT_MEM_ADDR);
 
   spi_ctrl* spictrl = NULL;
@@ -540,9 +545,13 @@ void ux00boot_load_gpt_partition(void* dst, const gpt_guid* partition_type_guid,
       ux00boot_fail(ERROR_CODE_UNHANDLED_SPI_DEVICE, 0);
       break;
   }
+#else
+  spi_ctrl* spictrl = (spi_ctrl*) SPI0_CTRL_ADDR;
+#endif
 
   unsigned int error = 0;
 
+#ifndef FPGA
   switch (boot_routine)
   {
     case UX00BOOT_ROUTINE_FLASH:
@@ -569,6 +578,10 @@ void ux00boot_load_gpt_partition(void* dst, const gpt_guid* partition_type_guid,
       error = ERROR_CODE_UNHANDLED_BOOT_ROUTINE;
       break;
   }
+#else
+  error = initialize_sd(spictrl, peripheral_input_khz, 0);
+  if (!error) error = load_sd_gpt_partition(spictrl, dst, partition_type_guid);
+#endif
 
   if (error) {
     ux00boot_fail(error, 0);

@@ -15,7 +15,12 @@ static Barrier barrier;
 extern const gpt_guid gpt_guid_sifive_fsbl;
 
 
+#ifndef FPGA
 #define CORE_CLK_KHZ 33000
+#else
+#include "tl_clock.h"
+#define CORE_CLK_KHZ TL_CLK/1000
+#endif
 
 
 void handle_trap(void)
@@ -39,11 +44,15 @@ int main()
 {
   if (read_csr(mhartid) == NONSMP_HART) {
     unsigned int peripheral_input_khz;
+#ifndef FPGA
     if (UX00PRCI_REG(UX00PRCI_CLKMUXSTATUSREG) & CLKMUX_STATUS_TLCLKSEL) {
       peripheral_input_khz = CORE_CLK_KHZ; // perpheral_clk = tlclk
     } else {
       peripheral_input_khz = (CORE_CLK_KHZ / 2);
     }
+#else
+    peripheral_input_khz = CORE_CLK_KHZ;
+#endif
     init_uart(peripheral_input_khz);
     ux00boot_load_gpt_partition((void*) CCACHE_SIDEBAND_ADDR, &gpt_guid_sifive_fsbl, peripheral_input_khz);
   }
