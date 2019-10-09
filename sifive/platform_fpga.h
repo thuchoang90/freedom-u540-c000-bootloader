@@ -31,7 +31,7 @@
  *****************************************************************************/
 
 // CPU info
-#define NUM_CORES 4
+#define NUM_CORES 2
 #define MAX_HART_ID 4
 #define GLOBAL_INT_SIZE 59
 #define GLOBAL_INT_MAX_PRIORITY 7
@@ -89,6 +89,8 @@
 #define ERROR_MEM_SIZE _AC(0x1000,UL)
 #define GPIO_CTRL_ADDR _AC(0x64002000,UL)
 #define GPIO_CTRL_SIZE _AC(0x1000,UL)
+#define GPIO1_CTRL_ADDR _AC(0x64003000,UL)
+#define GPIO1_CTRL_SIZE _AC(0x1000,UL)
 /*#define I2C_CTRL_ADDR _AC(0x10030000,UL)
 #define I2C_CTRL_SIZE _AC(0x1000,UL)
 #define ITIM0_MEM_ADDR _AC(0x1800000,UL)
@@ -183,6 +185,7 @@
 /*#define UART1_INT_BASE 6
 #define SPI2_INT_BASE 7*/
 #define GPIO_INT_BASE 8
+#define GPIO1_INT_BASE 9
 /*#define DMA_INT_BASE 24
 #define UX00DDR_INT_BASE 32
 #define MSI_INT_BASE 33
@@ -265,6 +268,7 @@
 #define EMEMORYOTP_REG(offset) _REG32(EMEMORYOTP_CTRL_ADDR, offset)*/
 #define ERROR_REG(offset) _REG32(ERROR_CTRL_ADDR, offset)
 #define GPIO_REG(offset) _REG32(GPIO_CTRL_ADDR, offset)
+#define GPIO1_REG(offset) _REG32(GPIO1_CTRL_ADDR, offset)
 /*#define I2C_REG(offset) _REG32(I2C_CTRL_ADDR, offset)
 #define ITIM0_REG(offset) _REG32(ITIM0_CTRL_ADDR, offset)
 #define ITIM1_REG(offset) _REG32(ITIM1_CTRL_ADDR, offset)
@@ -307,6 +311,7 @@
 #define EMEMORYOTP_REG64(offset) _REG64(EMEMORYOTP_CTRL_ADDR, offset)*/
 #define ERROR_REG64(offset) _REG64(ERROR_CTRL_ADDR, offset)
 #define GPIO_REG64(offset) _REG64(GPIO_CTRL_ADDR, offset)
+#define GPIO1_REG64(offset) _REG64(GPIO1_CTRL_ADDR, offset)
 /*#define I2C_REG64(offset) _REG64(I2C_CTRL_ADDR, offset)
 #define ITIM0_REG64(offset) _REG64(ITIM0_CTRL_ADDR, offset)
 #define ITIM1_REG64(offset) _REG64(ITIM1_CTRL_ADDR, offset)
@@ -345,6 +350,7 @@
 #define SPI1_SCKDIV_WIDTH 16
 #define SPI2_CS_WIDTH 1
 #define SPI2_SCKDIV_WIDTH 16*/
-#define GPIO_WIDTH 16
+#define GPIO_WIDTH 4
+#define GPIO1_WIDTH 8
 
 #endif /* _SIFIVE_PLATFORM_FPGA_H */
