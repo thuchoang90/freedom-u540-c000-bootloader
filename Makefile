@@ -49,6 +49,7 @@ LIB_FS_VC707=\
 	lib/ed25519/sc.o \
 	lib/ed25519/sign.o \
 	lib/ed25519/verify.o \
+	lib/aes/aes.o \
 
 LIB_FS_O=\
 	$(LIB_FS_VC707) \

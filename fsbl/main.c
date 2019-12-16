@@ -43,6 +43,7 @@
 
 #include "lib/sha3/sha3.h"
 #include "lib/ed25519/ed25519.h"
+#include "lib/aes/aes.h"
 
 #ifndef PAYLOAD_DEST
   #define PAYLOAD_DEST MEMORY_MEM_ADDR
@@ -566,12 +567,57 @@ void secure_boot_main() {
   // Measure the time
   unsigned long delta_mcycle = read_csr(mcycle) - start_mcycle;
   
-  unsigned long msecs = delta_mcycle/F_CLK;
+  //unsigned long msecs = delta_mcycle/F_CLK;
   uart_puts(uart, "Miliseconds signing: \r\n");
   uart_put_hex(uart, delta_mcycle);
   uart_puts(uart, "\r\n");
   
   // caller will clean core state and memory (including the stack), and boot.
+  
+  // Vectors extracted from the tiny AES test.c file in AES128 mode
+  uint8_t aeskey[] = { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
+  //uint8_t aesout[] = { 0x3a, 0xd7, 0x7b, 0xb4, 0x0d, 0x7a, 0x36, 0x60, 0xa8, 0x9e, 0xca, 0xf3, 0x24, 0x66, 0xef, 0x97 };
+  uint8_t aesin1[] = { 0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a };
+  uint8_t aesin2[] = { 0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a };
+  struct AES_ctx ctx;
+  
+  // Software encrypt AES128
+  start_mcycle = read_csr(mcycle);
+  AES_init_ctx(&ctx, aeskey);
+  AES_ECB_encrypt(&ctx, aesin1);
+  delta_mcycle = read_csr(mcycle) - start_mcycle;
+  uart_puts(uart, "\r\nSoftware encrypt (AES128)\r\n");
+  for(int i = 0; i < 4; i++) 
+    uart_put_hex(uart, *((uint32_t*)aesin1+i));
+  uart_puts(uart, "\r\nTime calculation: ");
+  uart_put_hex(uart, delta_mcycle);
+  
+  // Hardware encrypt AES128
+  start_mcycle = read_csr(mcycle);
+  // Put the key (only 128 bits lower)
+  for(int i = 0; i < 4; i++) 
+    AES_REG(AES_REG_KEY + i*4) = *((uint32_t*)aeskey+i);
+  for(int i = 4; i < 8; i++) 
+    AES_REG(AES_REG_KEY + i*4) = 0; // Clean the "other part" of the key, "just in case"
+  AES_REG(AES_REG_CONFIG) = 1; // AES128, encrypt
+  AES_REG(AES_REG_STATUS) = 1; // Key Expansion Enable
+  while(!(AES_REG(AES_REG_STATUS) & 0x4)); // Wait for ready
+  // Put the data
+  for(int i = 0; i < 4; i++) 
+    AES_REG(AES_REG_BLOCK + i*4) = *((uint32_t*)aesin2+i);
+  AES_REG(AES_REG_STATUS) = 2; // Data enable
+  while(!(AES_REG(AES_REG_STATUS) & 0x4)); // Wait for ready
+  // Copy back the data to the pointer
+  for(int i = 0; i < 4; i++) 
+    *((uint32_t*)aesin2+i) = AES_REG(AES_REG_RESULT + i*4);
+  delta_mcycle = read_csr(mcycle) - start_mcycle;
+  uart_puts(uart, "\r\nHardware encrypt (AES128)\r\n");
+  for(int i = 0; i < 4; i++) 
+    uart_put_hex(uart, *((uint32_t*)aesin2+i));
+  uart_puts(uart, "\r\nTime calculation: ");
+  uart_put_hex(uart, delta_mcycle);
+  uart_puts(uart, "\r\n");
+  
   return;
 }
 

@@ -16,6 +16,8 @@
 #include "sifive/devices/spi.h"
 #include "sifive/devices/uart.h"
 #include "sifive/devices/sha3.h"
+#include "sifive/devices/ed25519.h"
+#include "sifive/devices/aes.h"
 
 #ifdef vc707
   #include "tl_clock.h"
@@ -47,7 +49,7 @@
   #define RTC_FREQUENCY_HZ _AC(1000000,UL)
   #define RTC_PERIOD_NS _AC(1000,UL)
 #else
-  #define NUM_CORES 4
+  #define NUM_CORES 2
   #ifdef TL_CLK
     #define RTC_FREQUENCY_HZ TL_CLK
     #define RTC_PERIOD_NS 1000/TL_CLK
@@ -214,6 +216,13 @@
 #endif
 #define SHA3_CTRL_ADDR   _AC(0x64003000,UL)
 #define SHA3_CTRL_SIZE   _AC(0x1000,UL)
+#define ED25519_CTRL_ADDR   _AC(0x64004000,UL)
+#define ED25519_CTRL_SIZE   _AC(0x1000,UL)
+#define AES_CTRL_ADDR   _AC(0x64007000,UL)
+#define AES_CTRL_SIZE   _AC(0x1000,UL)
+#define USB11HS_CTRL_ADDR   _AC(0x64008000,UL)
+#define USB11HS_CTRL_SIZE   _AC(0x1000,UL)
+
 
 // IOF masks
 
@@ -372,6 +381,9 @@
 #define TEST_REG(offset) _REG32(TEST_CTRL_ADDR, offset)
 #define UART0_REG(offset) _REG32(UART0_CTRL_ADDR, offset)
 #define SHA3_REG(offset) _REG32(SHA3_CTRL_ADDR, offset)
+#define ED25519_REG(offset) _REG32(ED25519_CTRL_ADDR, offset)
+#define AES_REG(offset) _REG32(AES_CTRL_ADDR, offset)
+#define USB11HS_REG(offset) _REG32(USB11HS_CTRL_ADDR, offset)
 #define CLINT_REG64(offset) _REG64(CLINT_CTRL_ADDR, offset)
 #define DEBUG_REG64(offset) _REG64(DEBUG_CTRL_ADDR, offset)
 #define ERROR_REG64(offset) _REG64(ERROR_CTRL_ADDR, offset)
@@ -383,6 +395,9 @@
 #define TEST_REG64(offset) _REG64(TEST_CTRL_ADDR, offset)
 #define UART0_REG64(offset) _REG64(UART0_CTRL_ADDR, offset)
 #define SHA3_REG64(offset) _REG64(SHA3_CTRL_ADDR, offset)
+#define ED25519_REG64(offset) _REG64(ED25519_CTRL_ADDR, offset)
+#define AES_REG64(offset) _REG64(AES_CTRL_ADDR, offset)
+#define USB11HS_REG64(offset) _REG64(USB11HS_CTRL_ADDR, offset)
 
 // Helpers for getting and setting individual bit fields, shifting the values
 // for you.
