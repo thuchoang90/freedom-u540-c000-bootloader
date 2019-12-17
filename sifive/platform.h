@@ -18,6 +18,8 @@
 #include "sifive/devices/sha3.h"
 #include "sifive/devices/ed25519.h"
 #include "sifive/devices/aes.h"
+#include "sifive/devices/plic.h"
+#include "sifive/devices/usb11hs.h"
 
 #ifdef vc707
   #include "tl_clock.h"
@@ -267,6 +269,7 @@
 #define _REG64(p, i) (*(volatile uint64_t *)((p) + (i)))
 #define _REG32(p, i) (*(volatile uint32_t *)((p) + (i)))
 #define _REG16(p, i) (*(volatile uint16_t *)((p) + (i)))
+#define _REG8(p, i) (*(volatile uint8_t *)((p) + (i)))
 
 // Bulk set bits in `reg` to either 0 or 1.
 // E.g. SET_BITS(MY_REG, 0x00000007, 0) would generate MY_REG &= ~0x7
@@ -383,6 +386,7 @@
 #define SHA3_REG(offset) _REG32(SHA3_CTRL_ADDR, offset)
 #define ED25519_REG(offset) _REG32(ED25519_CTRL_ADDR, offset)
 #define AES_REG(offset) _REG32(AES_CTRL_ADDR, offset)
+#define USB11HS_REG8(offset) _REG8(USB11HS_CTRL_ADDR, offset)
 #define USB11HS_REG(offset) _REG32(USB11HS_CTRL_ADDR, offset)
 #define CLINT_REG64(offset) _REG64(CLINT_CTRL_ADDR, offset)
 #define DEBUG_REG64(offset) _REG64(DEBUG_CTRL_ADDR, offset)
@@ -416,5 +420,7 @@
 #define SPI0_CS_WIDTH 1
 #define SPI0_SCKDIV_WIDTH 16
 #define GPIO_WIDTH 16
+#define PLIC_NUM_INTERRUPTS 33
+#define PLIC_NUM_PRIORITIES 7
 
 #endif /* _SIFIVE_PLATFORM_H */

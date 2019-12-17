@@ -8,7 +8,7 @@ CC=${CROSSCOMPILE}gcc
 LD=${CROSSCOMPILE}ld
 OBJCOPY=${CROSSCOMPILE}objcopy
 OBJDUMP=${CROSSCOMPILE}objdump
-CFLAGS=-I. -Ilib/ -O2 -ggdb -march=rv64imafdc -mabi=lp64d -Wall -mcmodel=medany -mexplicit-relocs
+CFLAGS=-I. -Ilib/ -Iusb/ -O2 -ggdb -march=rv64imafdc -mabi=lp64d -Wall -mcmodel=medany -mexplicit-relocs
 CCASFLAGS=-I. -mcmodel=medany -mexplicit-relocs
 LDFLAGS=-nostdlib -nostartfiles
 
@@ -50,6 +50,8 @@ LIB_FS_VC707=\
 	lib/ed25519/sign.o \
 	lib/ed25519/verify.o \
 	lib/aes/aes.o \
+	usb/usbtest.o \
+	sifive/plic_driver.o \
 
 LIB_FS_O=\
 	$(LIB_FS_VC707) \

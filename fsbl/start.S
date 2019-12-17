@@ -5,6 +5,7 @@
 
 #include <sifive/bits.h>
 #include <sifive/smp.h>
+#include <encoding.h>
 
   .section .text.init
   .globl _prog_start
@@ -181,8 +182,17 @@ trap_entry:
   sd    t4,232(sp)
   sd    t5,240(sp)
   sd    t6,248(sp)
-  mv    a0,sp
+
+  csrr a0, mcause
+  csrr a1, mepc
+  mv a2, sp
   jal   ra, handle_trap
+  csrw mepc, a0
+
+  # Remain in M-mode after mret
+  li t0, MSTATUS_MPP
+  csrs mstatus, t0
+
   ld    ra,8(sp)
   ld    gp,24(sp)
   ld    tp,32(sp)

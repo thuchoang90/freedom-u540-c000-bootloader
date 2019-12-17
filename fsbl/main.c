@@ -33,6 +33,7 @@
 
 #include <sifive/platform.h>
 #include <sifive/barrier.h>
+#include <sifive/plic_driver.h>
 #include <stdatomic.h>
 
 #include <sifive/devices/ccache.h>
@@ -44,6 +45,7 @@
 #include "lib/sha3/sha3.h"
 #include "lib/ed25519/ed25519.h"
 #include "lib/aes/aes.h"
+#include "usb/usbtest.h"
 
 #ifndef PAYLOAD_DEST
   #define PAYLOAD_DEST MEMORY_MEM_ADDR
@@ -91,13 +93,64 @@ static const uintptr_t uart_devices[] = {
   UART1_CTRL_ADDR,
 };
 #endif
+// Structures for registering different interrupt handlers
+// for different parts of the application.
+void no_interrupt_handler (void) {};
+function_ptr_t g_ext_interrupt_handlers[PLIC_NUM_INTERRUPTS];
+function_ptr_t g_time_interrupt_handler = no_interrupt_handler;
+plic_instance_t g_plic;// Instance data for the PLIC.
+#define RTC_FREQ 1000000
 
-void handle_trap(uintptr_t sp) {
-  ux00boot_fail((long) read_csr(mcause), 1);
-  asm volatile ("nop");
-  asm volatile ("nop");
-  asm volatile ("nop");
-  asm volatile ("nop");
+void handle_m_ext_interrupt(){
+  int int_num  = PLIC_claim_interrupt(&g_plic);
+  if ((int_num >=1 ) && (int_num < PLIC_NUM_INTERRUPTS)) {
+    g_ext_interrupt_handlers[int_num]();
+  }
+  else {
+    ux00boot_fail((long) read_csr(mcause), 1);
+    asm volatile ("nop");
+    asm volatile ("nop");
+    asm volatile ("nop");
+    asm volatile ("nop");
+  }
+  PLIC_complete_interrupt(&g_plic, int_num);
+}
+
+void handle_m_time_interrupt() {
+  clear_csr(mie, MIP_MTIP);
+
+  // Reset the timer for 1s in the future.
+  // This also clears the existing timer interrupt.
+
+  volatile uint64_t * mtime       = (uint64_t*) (CLINT_CTRL_ADDR + CLINT_MTIME);
+  volatile uint64_t * mtimecmp    = (uint64_t*) (CLINT_CTRL_ADDR + CLINT_MTIMECMP);
+  uint64_t now = *mtime;
+  uint64_t then = now + RTC_FREQ;
+  *mtimecmp = then;
+
+  g_time_interrupt_handler();
+  
+  // Re-enable the timer interrupt.
+  set_csr(mie, MIP_MTIP);
+}
+
+uintptr_t handle_trap(uintptr_t mcause, uintptr_t epc)
+{
+  // External Machine-Level interrupt from PLIC
+  if ((mcause & MCAUSE_INT) && ((mcause & MCAUSE_CAUSE) == IRQ_M_EXT)) {
+    handle_m_ext_interrupt();
+    // External Machine-Level interrupt from PLIC
+  } else if ((mcause & MCAUSE_INT) && ((mcause & MCAUSE_CAUSE) == IRQ_M_TIMER)){
+    handle_m_time_interrupt();
+  }
+  else {
+    ux00boot_fail((long) read_csr(mcause), 1);
+    asm volatile ("nop");
+    asm volatile ("nop");
+    asm volatile ("nop");
+    asm volatile ("nop");
+  }
+  return epc;
 }
 
 int slave_main(int id, unsigned long dtb);
@@ -142,6 +195,20 @@ int puts(const char * str) {
 
 //HART 0 runs main
 int main(int id, unsigned long dtb) {
+  // Disable the machine & timer interrupts until setup is done.
+  clear_csr(mstatus, MSTATUS_MIE);
+  clear_csr(mie, MIP_MEIP);
+  clear_csr(mie, MIP_MTIP);
+
+  for (int ii = 0; ii < PLIC_NUM_INTERRUPTS; ii ++){
+    g_ext_interrupt_handlers[ii] = no_interrupt_handler;
+  }
+  
+  PLIC_init(&g_plic,
+	    PLIC_CTRL_ADDR,
+	    PLIC_NUM_INTERRUPTS,
+	    PLIC_NUM_PRIORITIES);
+  
   // PRCI init
   // Initialize UART divider for 33MHz core clock in case if trap is taken prior
   // to core clock bump.
@@ -616,7 +683,10 @@ void secure_boot_main() {
     uart_put_hex(uart, *((uint32_t*)aesin2+i));
   uart_puts(uart, "\r\nTime calculation: ");
   uart_put_hex(uart, delta_mcycle);
-  uart_puts(uart, "\r\n");
+  
+  uart_puts(uart, "\r\nEntering USB test\r\n");
+  
+  usb_test();
   
   return;
 }
