@@ -20,6 +20,7 @@
 #include "sifive/devices/aes.h"
 #include "sifive/devices/plic.h"
 #include "sifive/devices/usb11hs.h"
+#include "sifive/devices/random.h"
 
 #ifdef vc707
   #include "tl_clock.h"
@@ -224,6 +225,8 @@
 #define AES_CTRL_SIZE   _AC(0x1000,UL)
 #define USB11HS_CTRL_ADDR   _AC(0x64008000,UL)
 #define USB11HS_CTRL_SIZE   _AC(0x1000,UL)
+#define RANDOM_CTRL_ADDR   _AC(0x64009000,UL)
+#define RANDOM_CTRL_SIZE   _AC(0x1000,UL)
 
 
 // IOF masks
@@ -388,6 +391,7 @@
 #define AES_REG(offset) _REG32(AES_CTRL_ADDR, offset)
 #define USB11HS_REG8(offset) _REG8(USB11HS_CTRL_ADDR, offset)
 #define USB11HS_REG(offset) _REG32(USB11HS_CTRL_ADDR, offset)
+#define RANDOM_REG(offset) _REG32(RANDOM_CTRL_ADDR, offset)
 #define CLINT_REG64(offset) _REG64(CLINT_CTRL_ADDR, offset)
 #define DEBUG_REG64(offset) _REG64(DEBUG_CTRL_ADDR, offset)
 #define ERROR_REG64(offset) _REG64(ERROR_CTRL_ADDR, offset)
@@ -402,6 +406,7 @@
 #define ED25519_REG64(offset) _REG64(ED25519_CTRL_ADDR, offset)
 #define AES_REG64(offset) _REG64(AES_CTRL_ADDR, offset)
 #define USB11HS_REG64(offset) _REG64(USB11HS_CTRL_ADDR, offset)
+#define RANDOM_REG64(offset) _REG64(RANDOM_CTRL_ADDR, offset)
 
 // Helpers for getting and setting individual bit fields, shifting the values
 // for you.
