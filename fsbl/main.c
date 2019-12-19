@@ -396,6 +396,7 @@ int main(int id, unsigned long dtb) {
   // Post the serial number and build info
   extern const char * gitid;
   UART0_REG(UART_REG_TXCTRL) = UART_TXEN;
+  UART0_REG(UART_REG_RXCTRL) = UART_RXEN;
   puts("\r\nSiFive FSBL:       ");
   puts(date);
   puts("-");
@@ -706,9 +707,15 @@ void secure_boot_main() {
     while(RANDOM_REG(RANDOM_TRNG_BUSY));
   }
   
-  // USB test
-  uart_puts(uart, "\r\nEntering USB test\r\n");
-  usb_test();
+  uart_puts(uart, "\r\nPut 'u' for usb_test, any key for boot linux: ");
+  char cod = uart_getc(uart);
+  uart_puts(uart, "\r\n");
+  if(cod == 'u' || cod == 'U')
+  {
+    // USB test
+    uart_puts(uart, "\r\nEntering USB test\r\n");
+    usb_test();
+  }
   
   return;
 }
