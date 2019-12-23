@@ -196,9 +196,10 @@ int usb_test(void){
   intr_disable();
   int_config();
   timer1_config(); // インタラプト転送用タイマー設定
-  intr_enable();
 
   usb_init(); // USBホストCoreの初期化
+  
+  intr_enable();
 
   while(1) {
     //インタラプトハンドラでインタラプト転送を実行;
