@@ -1,0 +1,1 @@
+#define TL_CLK 100000000UL
