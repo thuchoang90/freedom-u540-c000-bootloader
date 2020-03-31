@@ -8,7 +8,7 @@ MEMORY
   debug_ctrl (rwx) : ORIGIN = 0x0, LENGTH = 0x1000
   /*modeselect_mem (rx) : ORIGIN = 0x1000, LENGTH = 0x1000*/
   test_ctrl (rw) : ORIGIN = 0x4000, LENGTH = 0x1000
-  maskrom_mem (rx) : ORIGIN = 0x20000000, LENGTH = 0x2000
+  maskrom_mem (rx) : ORIGIN = 0x20000000, LENGTH = 0x10000000		/*memory.lds: maskrom_mem (rx) : ORIGIN = 0x10000, LENGTH = 0x8000*/
   /*dtim_mem (rwx) : ORIGIN = 0x1000000, LENGTH = 0x2000
   buserror0_ctrl (rw) : ORIGIN = 0x1700000, LENGTH = 0x1000
   buserror1_ctrl (rw) : ORIGIN = 0x1701000, LENGTH = 0x1000
