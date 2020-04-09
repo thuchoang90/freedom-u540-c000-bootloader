@@ -1,4 +1,5 @@
 #include "ed25519.h"
+#include "sha3/sha3.h"
 #include "hwsha3.h"
 #include "ge.h"
 
@@ -6,8 +7,11 @@
 void ed25519_create_keypair(unsigned char *public_key, unsigned char *private_key, const unsigned char *seed) {
     ge_p3 A;
 
-    hwsha3_init();
-    hwsha3_final(private_key, seed, 32);
+    //hwsha3_init();
+    //hwsha3_final(private_key, seed, 32);
+    
+    sha3(seed, 32, private_key, 64);
+    
     private_key[0] &= 248;
     private_key[31] &= 63;
     private_key[31] |= 64;
@@ -43,7 +47,7 @@ void hw_ed25519_create_keypair(unsigned char *public_key, unsigned char *private
         if(i == 0) // TODO: This is really necessary? 
             ED25519_REG(ED25519_REG_DATA_K) = *(priv+i) = *(((uint32_t*)(SHA3_CTRL_ADDR+SHA3_REG_HASH_0)) + i) & 0xFFFFFFF8;
         else if(i == 7)
-            ED25519_REG(ED25519_REG_DATA_K) = *(priv+i) = *(((uint32_t*)(SHA3_CTRL_ADDR+SHA3_REG_HASH_0)) + i) & 0x3FFFFFFF | 0x40000000;
+            ED25519_REG(ED25519_REG_DATA_K) = *(priv+i) = (*(((uint32_t*)(SHA3_CTRL_ADDR+SHA3_REG_HASH_0)) + i) & 0x3FFFFFFF) | 0x40000000;
         else
             ED25519_REG(ED25519_REG_DATA_K) = *(priv+i) = *(((uint32_t*)(SHA3_CTRL_ADDR+SHA3_REG_HASH_0)) + i);
     }
@@ -61,7 +65,7 @@ void hw_ed25519_create_keypair(unsigned char *public_key, unsigned char *private
         if(i == 0) // TODO: This is really necessary? 
             ED25519_REG(ED25519_REG_DATA_K + i*4) = *(priv+i) = *(((uint32_t*)(SHA3_CTRL_ADDR+SHA3_REG_HASH_0)) + i) & 0xFFFFFFF8;
         else if(i == 7)
-            ED25519_REG(ED25519_REG_DATA_K + i*4) = *(priv+i) = *(((uint32_t*)(SHA3_CTRL_ADDR+SHA3_REG_HASH_0)) + i) & 0x3FFFFFFF | 0x40000000;
+            ED25519_REG(ED25519_REG_DATA_K + i*4) = *(priv+i) = (*(((uint32_t*)(SHA3_CTRL_ADDR+SHA3_REG_HASH_0)) + i) & 0x3FFFFFFF) | 0x40000000;
         else
             ED25519_REG(ED25519_REG_DATA_K + i*4) = *(priv+i) = *(((uint32_t*)(SHA3_CTRL_ADDR+SHA3_REG_HASH_0)) + i);
     }

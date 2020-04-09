@@ -604,23 +604,43 @@ void secure_boot_main() {
 
   // Derive {SK_D, PK_D} (device keys) from a 32 B random seed
   //ed25519_create_keypair(sanctum_dev_public_key, sanctum_dev_secret_key, scratchpad);
+  
+  // IN SOFTWARE
 
+  start_mcycle = read_csr(mcycle);
   // Measure SM
-  //sha3_init(&hash_ctx, 64);
-  //sha3_update(&hash_ctx, (void*)DDR_ADDR, sanctum_sm_size);
-  //sha3_final(sanctum_sm_hash, &hash_ctx);
+  sha3_init(&hash_ctx, 64);
+  sha3_update(&hash_ctx, (void*)DDR_ADDR, sanctum_sm_size);
+  sha3_final(sanctum_sm_hash, &hash_ctx);
+  
+  // Combine SK_D and H_SM via a hash
+  // sm_key_seed <-- H(SK_D, H_SM), truncate to 32B
+  sha3_init(&hash_ctx, 64);
+  sha3_update(&hash_ctx, sanctum_dev_secret_key, sizeof(*sanctum_dev_secret_key));
+  sha3_update(&hash_ctx, sanctum_sm_hash, sizeof(*sanctum_sm_hash));
+  sha3_final(scratchpad, &hash_ctx);
+  delta_mcycle = read_csr(mcycle) - start_mcycle;
+  
+  uart_puts(uart, "\r\nTime hashing in software: ");
+  uart_put_hex(uart, delta_mcycle);
+  
+  // IN HARDWARE
+  
+  start_mcycle = read_csr(mcycle);
+  // Measure SM
   hwsha3_init();
   hwsha3_final(sanctum_sm_hash, (void*)DDR_ADDR, sanctum_sm_size);
 
   // Combine SK_D and H_SM via a hash
   // sm_key_seed <-- H(SK_D, H_SM), truncate to 32B
-  //sha3_init(&hash_ctx, 64);
-  //sha3_update(&hash_ctx, sanctum_dev_secret_key, sizeof(*sanctum_dev_secret_key));
-  //sha3_update(&hash_ctx, sanctum_sm_hash, sizeof(*sanctum_sm_hash));
-  //sha3_final(scratchpad, &hash_ctx);
   hwsha3_init();
   hwsha3_update(sanctum_dev_secret_key, sizeof(*sanctum_dev_secret_key));
   hwsha3_final(scratchpad, sanctum_sm_hash, sizeof(*sanctum_sm_hash));
+  delta_mcycle = read_csr(mcycle) - start_mcycle;
+  
+  uart_puts(uart, "\r\nTime hashing in hardware: ");
+  uart_put_hex(uart, delta_mcycle);
+  
   // Derive {SK_D, PK_D} (device keys) from the first 32 B of the hash (NIST endorses SHA512 truncation as safe)
   start_mcycle = read_csr(mcycle);
   ed25519_create_keypair(sanctum_sm_public_key, sanctum_sm_secret_key, scratchpad);
@@ -674,7 +694,7 @@ void secure_boot_main() {
   delta_mcycle = read_csr(mcycle) - start_mcycle;
   
   //unsigned long msecs = delta_mcycle/F_CLK;
-  uart_puts(uart, "\r\nMiliseconds signing: \r\n");
+  uart_puts(uart, "\r\Time signing: \r\n");
   uart_put_hex(uart, delta_mcycle);
   uart_puts(uart, "\r\n");
   
