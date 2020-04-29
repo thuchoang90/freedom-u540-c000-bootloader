@@ -151,6 +151,8 @@ int main(int id, unsigned long dtb)
   unsigned long peripheral_input_khz;
 #else
   unsigned long peripheral_input_khz = F_CLK;
+  asm volatile("mv %0, a1" : "=r" (dtb));
+  dtb = (uintptr_t)dtb;
 #endif
 
 #ifndef FPGA
@@ -350,8 +352,7 @@ int main(int id, unsigned long dtb)
 	puts("\r\nUsing FSBL DTB");
   }
 #else
-  dtb = (uintptr_t)&own_dtb;
-  puts("\r\nUsing FSBL DTB");
+  puts("\r\nUsing ZSBL DTB");
 #endif
 
   memcpy((void*)dtb_target, (void*)dtb, fdt_size(dtb));
