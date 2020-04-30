@@ -579,11 +579,22 @@ void ux00boot_load_gpt_partition(void* dst, const gpt_guid* partition_type_guid,
       break;
   }
 #else
+  uart_puts((void*) UART0_CTRL_ADDR, "INIT SD card: ");
   error = initialize_sd(spictrl, peripheral_input_khz, 0);
-  if (!error) error = load_sd_gpt_partition(spictrl, dst, partition_type_guid);
+  if (!error){
+    uart_puts((void*) UART0_CTRL_ADDR, "done\r\n");
+    error = load_sd_gpt_partition(spictrl, dst, partition_type_guid);
+  }
+  else{
+    uart_puts((void*) UART0_CTRL_ADDR, "fail\r\n");
+  }
 #endif
 
   if (error) {
+    uart_puts((void*) UART0_CTRL_ADDR, "Load SD card fail\r\n");
     ux00boot_fail(error, 0);
+  }
+  else{
+    uart_puts((void*) UART0_CTRL_ADDR, "\r\nLoad SD card success\r\n");
   }
 }

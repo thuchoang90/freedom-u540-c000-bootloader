@@ -1,9 +1,9 @@
-export CONFIG=DevKitU500FPGADesign_WithDevKit150MHz
-export MODEL=VC707BaseShell
 export BOOTROM_DIR=`pwd`
 export BUILD_DIR=`pwd`/../../builds/vc707-u500devkit-nopcie-keystoneboot
-export PROJECT=sifive.fpgashells.shell.xilinx
-export CONFIG_PROJECT=sifive.freedom.unleashed
-export BOARD=vc707
-export ROMCONF=${BUILD_DIR}/${CONFIG_PROJECT}.${CONFIG}.rom.conf
 export rocketchip_dir=`pwd`/../../rocket-chip
+export CONFIG_PROJECT=uec.freedom.u500
+export CONFIG=ChipDesignTop
+export BOARD=vc707
+export PROJECT=uec.freedom.u500
+export MODEL=ChipShell
+export ROMCONF=${BUILD_DIR}/${CONFIG_PROJECT}.${CONFIG}.rom.conf

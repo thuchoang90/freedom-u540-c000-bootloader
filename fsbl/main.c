@@ -41,7 +41,7 @@
 #ifndef FPGA
 #define NUM_CORES 5
 #else
-#define NUM_CORES 4
+#define NUM_CORES 2
 #include "tl_clock.h"
 #define F_CLK TL_CLK/1000
 #endif
@@ -137,6 +137,15 @@ int puts(const char * str){
 	return 1;
 }
 
+void print_init(void){
+  puts("--------------------- in RAM now ----------------------\r\n");
+  puts("__________________PHAM LAB ! 範研究室__________________\r\n");
+  puts("| Hello again !                        | こんにちは！ |\r\n");
+  puts("| Tokyo, Japan                         | 東京  日本   |\r\n");
+  puts("| University of Electro-Communications | 電気通信大学 |\r\n");
+  puts("¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯\r\n");
+}
+
 //HART 0 runs main
 
 int main(int id, unsigned long dtb)
@@ -150,7 +159,10 @@ int main(int id, unsigned long dtb)
   const uint32_t initial_core_clk_khz = 33000;
   unsigned long peripheral_input_khz;
 #else
-  unsigned long peripheral_input_khz = F_CLK;
+  //unsigned long peripheral_input_khz = F_CLK;
+  GPIO1_REG(GPIO_INPUT_EN) = 0xFF;
+  GPIO1_REG(GPIO_OUTPUT_EN) = 0x0;
+  unsigned long  peripheral_input_khz = (GPIO1_REG(GPIO_INPUT_VAL)+1)*1000;
   asm volatile("mv %0, a1" : "=r" (dtb));
   dtb = (uintptr_t)dtb;
 #endif
@@ -334,7 +346,8 @@ int main(int id, unsigned long dtb)
   // Post the serial number and build info
   extern const char * gitid;
   UART0_REG(UART_REG_TXCTRL) = UART_TXEN;
-
+  UART0_REG(UART_REG_RXCTRL) = UART_RXEN;
+  print_init();
   puts("\r\nSiFive FSBL:       ");
   puts(date);
   puts("-");
@@ -418,10 +431,10 @@ int main(int id, unsigned long dtb)
   puts("\r\n");
 #endif
 
-  puts("Loading boot payload");
+  puts("Loading boot payload\r\n");
   ux00boot_load_gpt_partition((void*) PAYLOAD_DEST, &gpt_guid_sifive_bare_metal, peripheral_input_khz);
 
-  puts("\r\n\n");
+  puts("\r\nJump to BBL now\r\n\n");
 
   secure_boot_main();
 
