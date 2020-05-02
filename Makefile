@@ -144,5 +144,5 @@ endif
 	od -t x4 -An -w4 -v $< > $@
 
 clean::
-	rm -f */*.o */*.dtb zsbl.bin zsbl.elf zsbl.asm fsbl.bin fsbl.elf fsbl.asm lib/version.c
+	rm -f */*/*.o */*.o */*.dtb zsbl.bin zsbl.elf zsbl.asm fsbl.bin fsbl.elf fsbl.asm lib/version.c
 	rm -f FPGAzsbl.bin FPGAzsbl.elf FPGAzsbl.hex FPGAfsbl.bin FPGAfsbl.elf tl_clock.h $(clk)
