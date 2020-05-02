@@ -38,10 +38,7 @@
 #include "lib/sha3/sha3.h"
 #include "lib/ed25519/ed25519.h"
 
-#ifndef FPGA
-#define NUM_CORES 5
-#else
-#define NUM_CORES 4
+#ifdef FPGA
 #include "tl_clock.h"
 #define F_CLK TL_CLK/1000
 #endif
