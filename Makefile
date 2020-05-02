@@ -9,17 +9,29 @@ else
 FPGA_FLAG=-DFPGA
 endif
 
+ifeq ($(TEEHW),)
+TEEHW_FLAG=
+else
+TEEHW_FLAG=-DTEEHW
+endif
+
 CROSSCOMPILE?=riscv64-unknown-elf-
 CC=${CROSSCOMPILE}gcc
 LD=${CROSSCOMPILE}ld
 OBJCOPY=${CROSSCOMPILE}objcopy
 OBJDUMP=${CROSSCOMPILE}objdump
-CFLAGS=-I. -Ilib/ -O2 -ggdb -march=rv64imafdc -mabi=lp64d -Wall -mcmodel=medany -mexplicit-relocs $(FPGA_FLAG)
+CFLAGS=-I. -Ilib/ -O2 -ggdb -march=rv64imafdc -mabi=lp64d -Wall -mcmodel=medany -mexplicit-relocs $(FPGA_FLAG) $(TEEHW_FLAG)
 CCASFLAGS=-I. -mcmodel=medany -mexplicit-relocs
 LDFLAGS=-nostdlib -nostartfiles
 
 dts := $(BUILD_DIR)/$(CONFIG_PROJECT).$(CONFIG).dts
 clk := $(BUILD_DIR)/$(CONFIG_PROJECT).$(CONFIG).tl_clock.h
+
+ifeq ($(TEEHW),)
+lds=memory_freedom.lds
+else
+lds=memory_teehw.lds
+endif
 
 # This is broken up to match the order in the original zsbl
 # clkutils.o is there to match original zsbl, may not be needed
@@ -63,7 +75,11 @@ all: zsbl.bin fsbl.bin
 
 romgen: $(clk) FPGAzsbl.hex FPGAfsbl.bin
 	cp FPGAzsbl.hex $(BUILD_DIR)/
+ifeq ($(TEEHW),)
 	$(rocketchip_dir)/scripts/vlsi_rom_gen $(ROMCONF) $(BUILD_DIR)/FPGAzsbl.hex > $(BUILD_DIR)/rom.v
+else
+	$(ROMGEN) $(ROM_CONF_FILE) FPGAzsbl.hex > $(ROM_FILE)
+endif
 
 $(clk): $(dts)
 	awk '/tlclk {/ && !f{f=1; next}; f && match($$0, /^.*clock-frequency.*<(.*)>.*/, arr) { print "#define TL_CLK " arr[1] "UL"}' $< > tl_clock.h
@@ -85,7 +101,7 @@ zsbl/ux00boot.o: ux00boot/ux00boot.c
 zsbl.elf: zsbl/start.o zsbl/main.o $(LIB_ZS1_O) zsbl/ux00boot.o $(LIB_ZS2_O) memory.lds ux00_zsbl.lds
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(filter %.o,$^) $(patsubst %, -T%, $(filter %.lds,$^))
 
-FPGAzsbl.elf: zsbl/start.o zsbl/main.o $(LIB_ZS1_O) zsbl/ux00boot.o $(LIB_ZS2_O) memory_fpga.lds ux00_zsbl.lds
+FPGAzsbl.elf: zsbl/start.o zsbl/main.o $(LIB_ZS1_O) zsbl/ux00boot.o $(LIB_ZS2_O) $(lds) ux00_zsbl.lds
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(filter %.o,$^) $(patsubst %, -T%, $(filter %.lds,$^))
 
 fsbl/ux00boot.o: ux00boot/ux00boot.c
@@ -94,7 +110,7 @@ fsbl/ux00boot.o: ux00boot/ux00boot.c
 fsbl.elf: $(LIB_FS_O) ememoryotp/ememoryotp.o memory.lds ux00_fsbl.lds
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(filter %.o,$^) $(patsubst %, -T%, $(filter %.lds,$^))
 
-FPGAfsbl.elf: $(LIB_FS_O) memory_fpga.lds ux00_fsbl.lds
+FPGAfsbl.elf: $(LIB_FS_O) $(lds) ux00_fsbl.lds
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(filter %.o,$^) $(patsubst %, -T%, $(filter %.lds,$^))
 
 fsbl/dtb.o: fsbl/ux00_fsbl.dtb

@@ -7,7 +7,11 @@
 #define _SIFIVE_PLATFORM_H
 
 #ifdef FPGA
-#include <sifive/platform_fpga.h>
+#ifdef TEEHW
+#include <sifive/platform_teehw.h>
+#else
+#include <sifive/platform_freedom.h>
+#endif
 #else
 #include <sifive/platform_hifive.h>
 #endif
