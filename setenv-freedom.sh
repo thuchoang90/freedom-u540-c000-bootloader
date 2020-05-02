@@ -7,3 +7,4 @@ export CONFIG_PROJECT=sifive.freedom.unleashed
 export BOARD=vc707
 export ROMCONF=${BUILD_DIR}/${CONFIG_PROJECT}.${CONFIG}.rom.conf
 export rocketchip_dir=`pwd`/../../rocket-chip
+unset TEEHW
