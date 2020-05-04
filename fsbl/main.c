@@ -446,12 +446,75 @@ inline byte random_byte(unsigned int i) {
   return 0xac + (0xdd ^ i);
 }
 
+#ifdef TEEHW
+void hwsha3_init() {
+  SHA3_REG(SHA3_REG_STATUS) = 1 << 24; // Reset, and also put 0 in size
+}
+
+void hwsha3_update(void* data, size_t size) {
+  uint64_t* d = (uint64_t*)data;
+  SHA3_REG(SHA3_REG_STATUS) = 0;
+  while(size >= 8) {
+    SHA3_REG64(SHA3_REG_DATA_0) = *d;
+    SHA3_REG(SHA3_REG_STATUS) = 1 << 16;
+    size -= 8;
+    d += 1;
+  }
+  if(size > 0) {
+    SHA3_REG64(SHA3_REG_DATA_0) = *d;
+    SHA3_REG(SHA3_REG_STATUS) = size & 0x7;
+    SHA3_REG(SHA3_REG_STATUS) = 1 << 16;
+  }
+}
+
+void hwsha3_final(byte* hash, void* data, size_t size) {
+  uint64_t* d = (uint64_t*)data;
+  SHA3_REG(SHA3_REG_STATUS) = 0;
+  while(size >= 8) {
+    size -= 8;
+    SHA3_REG64(SHA3_REG_DATA_0) = *d;
+    SHA3_REG(SHA3_REG_STATUS) = 1 << 16;
+    d += 1;
+  }
+  /*if(size > 0)*/ {
+    if(size > 0) SHA3_REG64(SHA3_REG_DATA_0) = *d;
+    SHA3_REG(SHA3_REG_STATUS) = size & 0x7;
+    SHA3_REG(SHA3_REG_STATUS) = 3 << 16;
+  }
+  while(SHA3_REG(SHA3_REG_STATUS) & (1 << 10));
+  for(int i = 0; i < 8; i++) {
+    *(((uint64_t*)hash) + i) = *(((uint64_t*)(SHA3_CTRL_ADDR+SHA3_REG_HASH_0)) + i);
+  }
+}
+#endif
 
 void secure_boot_main(){
   //*sanctum_sm_size = 0x200;
   // Reserve stack space for secrets
   byte scratchpad[128];
   sha3_ctx_t hash_ctx;
+#ifdef TEEHW
+  void *uart = (void*)UART0_CTRL_ADDR;
+  uart_puts(uart, "Hello world, FSBL\r\n");
+
+  // Test the hardware with the software SHA3
+  byte hash[64];
+  uint32_t* hs = (uint32_t*)hash;
+  sha3_init(&hash_ctx, 64);
+  sha3_update(&hash_ctx, (void*)"FOX1", 4);
+  sha3_final(hash, &hash_ctx);
+  for(int i = 0; i < 16; i++)
+     uart_put_hex(uart, *(hs+i));
+  uart_puts(uart, "\r\n");
+
+  hwsha3_init(&hash_ctx);
+  hwsha3_final(hash, (void*)"FOX1", 4);
+  for(int i = 0; i < 16; i++)
+     uart_put_hex(uart, *(hs+i));
+  uart_puts(uart, "\r\n");
+
+  unsigned long start_mcycle = read_csr(mcycle);
+#endif
 
   // TODO: on real device, copy boot image from memory. In simulator, HTIF writes boot image
   // ... SD card to beginning of memory.
@@ -481,16 +544,27 @@ void secure_boot_main(){
   //ed25519_create_keypair(sanctum_dev_public_key, sanctum_dev_secret_key, scratchpad);
 
   // Measure SM
+#ifndef TEEHW
   sha3_init(&hash_ctx, 64);
   sha3_update(&hash_ctx, (void*)DRAM_BASE, sanctum_sm_size);
   sha3_final(sanctum_sm_hash, &hash_ctx);
+#else
+  hwsha3_init();
+  hwsha3_final(sanctum_sm_hash, (void*)DRAM_BASE, sanctum_sm_size);
+#endif
 
   // Combine SK_D and H_SM via a hash
   // sm_key_seed <-- H(SK_D, H_SM), truncate to 32B
+#ifndef TEEHW
   sha3_init(&hash_ctx, 64);
   sha3_update(&hash_ctx, sanctum_dev_secret_key, sizeof(*sanctum_dev_secret_key));
   sha3_update(&hash_ctx, sanctum_sm_hash, sizeof(*sanctum_sm_hash));
   sha3_final(scratchpad, &hash_ctx);
+#else
+  hwsha3_init();
+  hwsha3_update(sanctum_dev_secret_key, sizeof(*sanctum_dev_secret_key));
+  hwsha3_final(scratchpad, sanctum_sm_hash, sizeof(*sanctum_sm_hash));
+#endif
   // Derive {SK_D, PK_D} (device keys) from the first 32 B of the hash (NIST endorses SHA512 truncation as safe)
   ed25519_create_keypair(sanctum_sm_public_key, sanctum_sm_secret_key, scratchpad);
 
@@ -503,6 +577,16 @@ void secure_boot_main(){
   // Clean up
   // Erase SK_D
   memset((void*)sanctum_dev_secret_key, 0, sizeof(*sanctum_sm_secret_key));
+
+#ifdef TEEHW
+  // Measure the time
+  unsigned long delta_mcycle = read_csr(mcycle) - start_mcycle;
+
+  unsigned long msecs = delta_mcycle/F_CLK;
+  uart_puts(uart, "Miliseconds signing: \r\n");
+  uart_put_hex(uart, delta_mcycle);
+  uart_puts(uart, "\r\n");
+#endif
 
   // caller will clean core state and memory (including the stack), and boot.
   return;

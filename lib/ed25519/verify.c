@@ -1,5 +1,9 @@
 #include "ed25519.h"
+#ifndef TEEHW
 #include "sha3/sha3.h"
+#else
+#include "hwsha3.h"
+#endif
 #include "ge.h"
 #include "sc.h"
 
@@ -47,7 +51,9 @@ static int consttime_equal(const unsigned char *x, const unsigned char *y) {
 int ed25519_verify(const unsigned char *signature, const unsigned char *message, size_t message_len, const unsigned char *public_key) {
     unsigned char h[64];
     unsigned char checker[32];
+#ifndef TEEHW
     sha3_ctx_t hash;
+#endif
     ge_p3 A;
     ge_p2 R;
 
@@ -59,11 +65,18 @@ int ed25519_verify(const unsigned char *signature, const unsigned char *message,
         return 0;
     }
 
+#ifndef TEEHW
     sha3_init(&hash, 64);
     sha3_update(&hash, signature, 32);
     sha3_update(&hash, public_key, 32);
     sha3_update(&hash, message, message_len);
     sha3_final(h, &hash);
+#else
+    hwsha3_init();
+    hwsha3_update(signature, 32);
+    hwsha3_update(public_key, 32);
+    hwsha3_final(h, message, message_len);
+#endif
     
     sc_reduce(h);
     ge_double_scalarmult_vartime(&R, h, &A, signature + 32);

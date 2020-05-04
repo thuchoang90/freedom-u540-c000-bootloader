@@ -16,6 +16,7 @@
 #include "sifive/devices/uart.h"
 #include "sifive/devices/ux00prci.h"
 #include "tl_clock.h"
+#include "sifive/devices/sha3.h"
 
  // Some things missing from the official encoding.h
 #if __riscv_xlen == 32
@@ -173,6 +174,8 @@
 #define UX00DDR_CTRL_SIZE _AC(0x4000,UL)
 #define UX00PRCI_CTRL_ADDR _AC(0x10000000,UL)
 #define UX00PRCI_CTRL_SIZE _AC(0x1000,UL)*/
+#define SHA3_CTRL_ADDR   _AC(0x64003000,UL)
+#define SHA3_CTRL_SIZE   _AC(0x1000,UL)
 
 // IOF masks
 
@@ -287,6 +290,7 @@
 #define SPI2_REG(offset) _REG32(SPI2_CTRL_ADDR, offset)*/
 #define TEST_REG(offset) _REG32(TEST_CTRL_ADDR, offset)
 #define UART0_REG(offset) _REG32(UART0_CTRL_ADDR, offset)
+#define SHA3_REG(offset) _REG32(SHA3_CTRL_ADDR, offset)
 /*#define UART1_REG(offset) _REG32(UART1_CTRL_ADDR, offset)
 #define UX00DDR_REG(offset) _REG32(UX00DDR_CTRL_ADDR, offset)
 #define UX00PRCI_REG(offset) _REG32(UX00PRCI_CTRL_ADDR, offset)
@@ -329,6 +333,7 @@
 #define SPI2_REG64(offset) _REG64(SPI2_CTRL_ADDR, offset)*/
 #define TEST_REG64(offset) _REG64(TEST_CTRL_ADDR, offset)
 #define UART0_REG64(offset) _REG64(UART0_CTRL_ADDR, offset)
+#define SHA3_REG64(offset) _REG64(SHA3_CTRL_ADDR, offset)
 /*#define UART1_REG64(offset) _REG64(UART1_CTRL_ADDR, offset)
 #define UX00DDR_REG64(offset) _REG64(UX00DDR_CTRL_ADDR, offset)
 #define UX00PRCI_REG64(offset) _REG64(UX00PRCI_CTRL_ADDR, offset)*/
