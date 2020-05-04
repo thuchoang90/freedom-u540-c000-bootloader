@@ -39,6 +39,8 @@
 #include "lib/ed25519/ed25519.h"
 #ifdef TEEHW
 #include "lib/aes/aes.h"
+#include <sifive/plic_driver.h>
+#include "usb/usbtest.h"
 #endif
 
 #ifdef FPGA
@@ -86,6 +88,67 @@ static const uintptr_t uart_devices[] = {
 
 #endif
 
+#ifdef TEEHW
+// Structures for registering different interrupt handlers
+// for different parts of the application.
+void no_interrupt_handler (void) {};
+function_ptr_t g_ext_interrupt_handlers[PLIC_NUM_INTERRUPTS];
+function_ptr_t g_time_interrupt_handler = no_interrupt_handler;
+plic_instance_t g_plic;// Instance data for the PLIC.
+#define RTC_FREQ 1000000
+
+void handle_m_ext_interrupt(){
+  int int_num  = PLIC_claim_interrupt(&g_plic);
+  if ((int_num >=1 ) && (int_num < PLIC_NUM_INTERRUPTS)) {
+    g_ext_interrupt_handlers[int_num]();
+  }
+  else {
+    ux00boot_fail((long) read_csr(mcause), 1);
+    asm volatile ("nop");
+    asm volatile ("nop");
+    asm volatile ("nop");
+    asm volatile ("nop");
+  }
+  PLIC_complete_interrupt(&g_plic, int_num);
+}
+
+void handle_m_time_interrupt() {
+  clear_csr(mie, MIP_MTIP);
+
+  // Reset the timer for 1s in the future.
+  // This also clears the existing timer interrupt.
+
+  volatile uint64_t * mtime       = (uint64_t*) (CLINT_CTRL_ADDR + CLINT_MTIME);
+  volatile uint64_t * mtimecmp    = (uint64_t*) (CLINT_CTRL_ADDR + CLINT_MTIMECMP);
+  uint64_t now = *mtime;
+  uint64_t then = now + RTC_FREQ;
+  *mtimecmp = then;
+
+  g_time_interrupt_handler();
+
+  // Re-enable the timer interrupt.
+  set_csr(mie, MIP_MTIP);
+}
+
+uintptr_t handle_trap(uintptr_t mcause, uintptr_t epc)
+{
+  // External Machine-Level interrupt from PLIC
+  if ((mcause & MCAUSE_INT) && ((mcause & MCAUSE_CAUSE) == IRQ_M_EXT)) {
+    handle_m_ext_interrupt();
+    // External Machine-Level interrupt from PLIC
+  } else if ((mcause & MCAUSE_INT) && ((mcause & MCAUSE_CAUSE) == IRQ_M_TIMER)){
+    handle_m_time_interrupt();
+  }
+  else {
+    ux00boot_fail((long) read_csr(mcause), 1);
+    asm volatile ("nop");
+    asm volatile ("nop");
+    asm volatile ("nop");
+    asm volatile ("nop");
+  }
+  return epc;
+}
+#else
 void handle_trap(uintptr_t sp)
 {
   ux00boot_fail((long) read_csr(mcause), 1);
@@ -94,7 +157,7 @@ void handle_trap(uintptr_t sp)
   asm volatile ("nop");
   asm volatile ("nop");
 }
-
+#endif
 
 int slave_main(int id, unsigned long dtb);
 void secure_boot_main();
@@ -153,6 +216,22 @@ int main(int id, unsigned long dtb)
   unsigned long peripheral_input_khz = F_CLK;
   asm volatile("mv %0, a1" : "=r" (dtb));
   dtb = (uintptr_t)dtb;
+#endif
+
+#ifdef TEEHW
+  // Disable the machine & timer interrupts until setup is done.
+  clear_csr(mstatus, MSTATUS_MIE);
+  clear_csr(mie, MIP_MEIP);
+  clear_csr(mie, MIP_MTIP);
+
+  for (int ii = 0; ii < PLIC_NUM_INTERRUPTS; ii ++) {
+    g_ext_interrupt_handlers[ii] = no_interrupt_handler;
+  }
+
+  PLIC_init(&g_plic,
+            PLIC_CTRL_ADDR,
+            PLIC_NUM_INTERRUPTS,
+            PLIC_NUM_PRIORITIES);
 #endif
 
 #ifndef FPGA
@@ -334,6 +413,9 @@ int main(int id, unsigned long dtb)
   // Post the serial number and build info
   extern const char * gitid;
   UART0_REG(UART_REG_TXCTRL) = UART_TXEN;
+#ifdef TEEHW
+  UART0_REG(UART_REG_RXCTRL) = UART_RXEN;
+#endif
 
   puts("\r\nSiFive FSBL:       ");
   puts(date);
@@ -632,7 +714,15 @@ void secure_boot_main(){
     uart_put_hex(uart, *((uint32_t*)aesin2+i));
   uart_puts(uart, "\r\nTime calculation: ");
   uart_put_hex(uart, delta_mcycle);
+
+  uart_puts(uart, "\r\nPut 'u' for usb_test, any key for boot linux: ");
+  char cod = uart_getc(uart);
   uart_puts(uart, "\r\n");
+  if(cod == 'u' || cod == 'U') {
+    // USB test
+    uart_puts(uart, "\r\nEntering USB test\r\n");
+    usb_test();
+  }
 #endif
 
   // caller will clean core state and memory (including the stack), and boot.

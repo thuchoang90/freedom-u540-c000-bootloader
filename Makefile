@@ -10,8 +10,10 @@ FPGA_FLAG=-DFPGA
 endif
 
 ifeq ($(TEEHW),)
+IUSB=
 TEEHW_FLAG=
 else
+IUSB=-Iusb/
 TEEHW_FLAG=-DTEEHW
 endif
 
@@ -20,7 +22,7 @@ CC=${CROSSCOMPILE}gcc
 LD=${CROSSCOMPILE}ld
 OBJCOPY=${CROSSCOMPILE}objcopy
 OBJDUMP=${CROSSCOMPILE}objdump
-CFLAGS=-I. -Ilib/ -O2 -ggdb -march=rv64imafdc -mabi=lp64d -Wall -mcmodel=medany -mexplicit-relocs $(FPGA_FLAG) $(TEEHW_FLAG)
+CFLAGS=-I. -Ilib/ $(IUSB) -O2 -ggdb -march=rv64imafdc -mabi=lp64d -Wall -mcmodel=medany -mexplicit-relocs $(FPGA_FLAG) $(TEEHW_FLAG)
 CCASFLAGS=-I. -mcmodel=medany -mexplicit-relocs
 LDFLAGS=-nostdlib -nostartfiles
 
@@ -71,7 +73,10 @@ LIB_FS_O= \
 ifeq ($(TEEHW),)
 LIB_TEEHW=
 else
-LIB_TEEHW=lib/aes/aes.o
+LIB_TEEHW=\
+	lib/aes/aes.o \
+	usb/usbtest.o \
+	sifive/plic_driver.o
 endif
 
 

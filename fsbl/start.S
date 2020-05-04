@@ -5,6 +5,9 @@
 
 #include <sifive/bits.h>
 #include <sifive/smp.h>
+#ifdef TEEHW
+#include <encoding.h>
+#endif
 
   .section .text.init
   .globl _prog_start
@@ -181,8 +184,20 @@ trap_entry:
   sd    t4,232(sp)
   sd    t5,240(sp)
   sd    t6,248(sp)
+#ifndef TEEHW
   mv    a0,sp
+#else
+  csrr a0, mcause
+  csrr a1, mepc
+  mv a2, sp
+#endif
   jal   ra, handle_trap
+#ifdef TEEHW
+  csrw mepc, a0
+  # Remain in M-mode after mret
+  li t0, MSTATUS_MPP
+  csrs mstatus, t0
+#endif
   ld    ra,8(sp)
   ld    gp,24(sp)
   ld    tp,32(sp)
