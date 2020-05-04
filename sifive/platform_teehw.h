@@ -21,6 +21,7 @@
 #include "sifive/devices/aes.h"
 #include "sifive/devices/plic.h"
 #include "sifive/devices/usb11hs.h"
+#include "sifive/devices/random.h"
 
  // Some things missing from the official encoding.h
 #if __riscv_xlen == 32
@@ -186,6 +187,8 @@
 #define AES_CTRL_SIZE   _AC(0x1000,UL)
 #define USB11HS_CTRL_ADDR   _AC(0x64008000,UL)
 #define USB11HS_CTRL_SIZE   _AC(0x1000,UL)
+#define RANDOM_CTRL_ADDR   _AC(0x64009000,UL)
+#define RANDOM_CTRL_SIZE   _AC(0x1000,UL)
 
 // IOF masks
 
@@ -306,6 +309,7 @@
 #define AES_REG(offset) _REG32(AES_CTRL_ADDR, offset)
 #define USB11HS_REG8(offset) _REG8(USB11HS_CTRL_ADDR, offset)
 #define USB11HS_REG(offset) _REG32(USB11HS_CTRL_ADDR, offset)
+#define RANDOM_REG(offset) _REG32(RANDOM_CTRL_ADDR, offset)
 /*#define UART1_REG(offset) _REG32(UART1_CTRL_ADDR, offset)
 #define UX00DDR_REG(offset) _REG32(UX00DDR_CTRL_ADDR, offset)
 #define UX00PRCI_REG(offset) _REG32(UX00PRCI_CTRL_ADDR, offset)
@@ -352,6 +356,7 @@
 #define ED25519_REG64(offset) _REG64(ED25519_CTRL_ADDR, offset)
 #define AES_REG64(offset) _REG64(AES_CTRL_ADDR, offset)
 #define USB11HS_REG64(offset) _REG64(USB11HS_CTRL_ADDR, offset)
+#define RANDOM_REG64(offset) _REG64(RANDOM_CTRL_ADDR, offset)
 /*#define UART1_REG64(offset) _REG64(UART1_CTRL_ADDR, offset)
 #define UX00DDR_REG64(offset) _REG64(UX00DDR_CTRL_ADDR, offset)
 #define UX00PRCI_REG64(offset) _REG64(UX00PRCI_CTRL_ADDR, offset)*/
