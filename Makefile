@@ -68,6 +68,12 @@ LIB_FS_O= \
 	lib/ed25519/sign.o \
 	lib/ed25519/verify.o
 
+ifeq ($(TEEHW),)
+LIB_TEEHW=
+else
+LIB_TEEHW=lib/aes/aes.o
+endif
+
 
 H=$(wildcard *.h */*.h)
 
@@ -110,7 +116,7 @@ fsbl/ux00boot.o: ux00boot/ux00boot.c
 fsbl.elf: $(LIB_FS_O) ememoryotp/ememoryotp.o memory.lds ux00_fsbl.lds
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(filter %.o,$^) $(patsubst %, -T%, $(filter %.lds,$^))
 
-FPGAfsbl.elf: $(LIB_FS_O) $(lds) ux00_fsbl.lds
+FPGAfsbl.elf: $(LIB_FS_O) $(LIB_TEEHW) $(lds) ux00_fsbl.lds
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(filter %.o,$^) $(patsubst %, -T%, $(filter %.lds,$^))
 
 fsbl/dtb.o: fsbl/ux00_fsbl.dtb

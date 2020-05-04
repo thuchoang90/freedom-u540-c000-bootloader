@@ -17,6 +17,8 @@
 #include "sifive/devices/ux00prci.h"
 #include "tl_clock.h"
 #include "sifive/devices/sha3.h"
+#include "sifive/devices/ed25519.h"
+#include "sifive/devices/aes.h"
 
  // Some things missing from the official encoding.h
 #if __riscv_xlen == 32
@@ -176,6 +178,12 @@
 #define UX00PRCI_CTRL_SIZE _AC(0x1000,UL)*/
 #define SHA3_CTRL_ADDR   _AC(0x64003000,UL)
 #define SHA3_CTRL_SIZE   _AC(0x1000,UL)
+#define ED25519_CTRL_ADDR   _AC(0x64004000,UL)
+#define ED25519_CTRL_SIZE   _AC(0x1000,UL)
+#define AES_CTRL_ADDR   _AC(0x64007000,UL)
+#define AES_CTRL_SIZE   _AC(0x1000,UL)
+#define USB11HS_CTRL_ADDR   _AC(0x64008000,UL)
+#define USB11HS_CTRL_SIZE   _AC(0x1000,UL)
 
 // IOF masks
 
@@ -291,6 +299,9 @@
 #define TEST_REG(offset) _REG32(TEST_CTRL_ADDR, offset)
 #define UART0_REG(offset) _REG32(UART0_CTRL_ADDR, offset)
 #define SHA3_REG(offset) _REG32(SHA3_CTRL_ADDR, offset)
+#define ED25519_REG(offset) _REG32(ED25519_CTRL_ADDR, offset)
+#define AES_REG(offset) _REG32(AES_CTRL_ADDR, offset)
+#define USB11HS_REG(offset) _REG32(USB11HS_CTRL_ADDR, offset)
 /*#define UART1_REG(offset) _REG32(UART1_CTRL_ADDR, offset)
 #define UX00DDR_REG(offset) _REG32(UX00DDR_CTRL_ADDR, offset)
 #define UX00PRCI_REG(offset) _REG32(UX00PRCI_CTRL_ADDR, offset)
@@ -334,6 +345,9 @@
 #define TEST_REG64(offset) _REG64(TEST_CTRL_ADDR, offset)
 #define UART0_REG64(offset) _REG64(UART0_CTRL_ADDR, offset)
 #define SHA3_REG64(offset) _REG64(SHA3_CTRL_ADDR, offset)
+#define ED25519_REG64(offset) _REG64(ED25519_CTRL_ADDR, offset)
+#define AES_REG64(offset) _REG64(AES_CTRL_ADDR, offset)
+#define USB11HS_REG64(offset) _REG64(USB11HS_CTRL_ADDR, offset)
 /*#define UART1_REG64(offset) _REG64(UART1_CTRL_ADDR, offset)
 #define UX00DDR_REG64(offset) _REG64(UX00DDR_CTRL_ADDR, offset)
 #define UX00PRCI_REG64(offset) _REG64(UX00PRCI_CTRL_ADDR, offset)*/
