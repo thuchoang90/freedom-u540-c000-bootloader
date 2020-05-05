@@ -633,31 +633,41 @@ void secure_boot_main(){
   //ed25519_create_keypair(sanctum_dev_public_key, sanctum_dev_secret_key, scratchpad);
 
   // Measure SM
-#ifndef TEEHW
+#ifdef TEEHW
+  start_mcycle = read_csr(mcycle);
+#endif
   sha3_init(&hash_ctx, 64);
   sha3_update(&hash_ctx, (void*)DRAM_BASE, sanctum_sm_size);
   sha3_final(sanctum_sm_hash, &hash_ctx);
-#else
-  hwsha3_init();
-  hwsha3_final(sanctum_sm_hash, (void*)DRAM_BASE, sanctum_sm_size);
-#endif
 
   // Combine SK_D and H_SM via a hash
   // sm_key_seed <-- H(SK_D, H_SM), truncate to 32B
-#ifndef TEEHW
   sha3_init(&hash_ctx, 64);
   sha3_update(&hash_ctx, sanctum_dev_secret_key, sizeof(*sanctum_dev_secret_key));
   sha3_update(&hash_ctx, sanctum_sm_hash, sizeof(*sanctum_sm_hash));
   sha3_final(scratchpad, &hash_ctx);
-#else
+#ifdef TEEHW
+  delta_mcycle = read_csr(mcycle) - start_mcycle;
+  uart_puts(uart, "\r\nTime hashing in software: ");
+  uart_put_hex(uart, delta_mcycle);
+
+  start_mcycle = read_csr(mcycle);
+  hwsha3_init();
+  hwsha3_final(sanctum_sm_hash, (void*)DRAM_BASE, sanctum_sm_size);
+
+  // Combine SK_D and H_SM via a hash
+  // sm_key_seed <-- H(SK_D, H_SM), truncate to 32B
   hwsha3_init();
   hwsha3_update(sanctum_dev_secret_key, sizeof(*sanctum_dev_secret_key));
   hwsha3_final(scratchpad, sanctum_sm_hash, sizeof(*sanctum_sm_hash));
+  delta_mcycle = read_csr(mcycle) - start_mcycle;
+  uart_puts(uart, "\r\nTime hashing in hardware: ");
+  uart_put_hex(uart, delta_mcycle);
+
   start_mcycle = read_csr(mcycle);
 #endif
   // Derive {SK_D, PK_D} (device keys) from the first 32 B of the hash (NIST endorses SHA512 truncation as safe)
   ed25519_create_keypair(sanctum_sm_public_key, sanctum_sm_secret_key, scratchpad);
-
 #ifdef TEEHW
   delta_mcycle = read_csr(mcycle) - start_mcycle;
   uart_puts(uart, "\r\nSoftware public key\r\n");
@@ -668,6 +678,7 @@ void secure_boot_main(){
     uart_put_hex(uart, *((uint32_t*)sanctum_sm_secret_key+i));
   uart_puts(uart, "\r\nTime calculation: ");
   uart_put_hex(uart, delta_mcycle);
+
   start_mcycle = read_csr(mcycle);
   hw_ed25519_create_keypair(sanctum_sm_public_key_hw, sanctum_sm_secret_key, scratchpad);
   delta_mcycle = read_csr(mcycle) - start_mcycle;
@@ -716,7 +727,7 @@ start_mcycle = read_csr(mcycle);
   delta_mcycle = read_csr(mcycle) - start_mcycle;
 
   //unsigned long msecs = delta_mcycle/F_CLK;
-  uart_puts(uart, "\r\nMiliseconds signing: \r\n");
+  uart_puts(uart, "\r\nTime signing: \r\n");
   uart_put_hex(uart, delta_mcycle);
   uart_puts(uart, "\r\n");
 
