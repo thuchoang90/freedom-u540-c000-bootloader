@@ -602,6 +602,7 @@ void secure_boot_main(){
   uart_puts(uart, "\r\n");
 
   unsigned long start_mcycle = read_csr(mcycle);
+  unsigned long delta_mcycle;
 #endif
 
   // TODO: on real device, copy boot image from memory. In simulator, HTIF writes boot image
@@ -652,39 +653,58 @@ void secure_boot_main(){
   hwsha3_init();
   hwsha3_update(sanctum_dev_secret_key, sizeof(*sanctum_dev_secret_key));
   hwsha3_final(scratchpad, sanctum_sm_hash, sizeof(*sanctum_sm_hash));
+  start_mcycle = read_csr(mcycle);
 #endif
   // Derive {SK_D, PK_D} (device keys) from the first 32 B of the hash (NIST endorses SHA512 truncation as safe)
   ed25519_create_keypair(sanctum_sm_public_key, sanctum_sm_secret_key, scratchpad);
 
 #ifdef TEEHW
+  delta_mcycle = read_csr(mcycle) - start_mcycle;
   uart_puts(uart, "\r\nSoftware public key\r\n");
   for(int i = 0; i < 8; i++)
     uart_put_hex(uart, *((uint32_t*)sanctum_sm_public_key+i));
   uart_puts(uart, "\r\nSoftware private key\r\n");
   for(int i = 0; i < 16; i++)
     uart_put_hex(uart, *((uint32_t*)sanctum_sm_secret_key+i));
+  uart_puts(uart, "\r\nTime calculation: ");
+  uart_put_hex(uart, delta_mcycle);
+  start_mcycle = read_csr(mcycle);
   hw_ed25519_create_keypair(sanctum_sm_public_key_hw, sanctum_sm_secret_key, scratchpad);
+  delta_mcycle = read_csr(mcycle) - start_mcycle;
   uart_puts(uart, "\r\nHardware public key\r\n");
   for(int i = 0; i < 8; i++)
     uart_put_hex(uart, *((uint32_t*)sanctum_sm_public_key_hw+i));
   uart_puts(uart, "\r\nHardware private key\r\n");
   for(int i = 0; i < 16; i++)
     uart_put_hex(uart, *((uint32_t*)sanctum_sm_secret_key+i));
+  uart_puts(uart, "\r\nTime calculation: ");
+  uart_put_hex(uart, delta_mcycle);
 #endif
 
   // Endorse the SM
   memcpy(scratchpad, sanctum_sm_hash, 64);
   memcpy(scratchpad + 64, sanctum_sm_public_key, 32);
+
+#ifdef TEEHW
+start_mcycle = read_csr(mcycle);
+#endif
   // Sign (H_SM, PK_SM) with SK_D
   ed25519_sign(sanctum_sm_signature, scratchpad, 64 + 32, sanctum_dev_public_key, sanctum_dev_secret_key);
 #ifdef TEEHW
+  delta_mcycle = read_csr(mcycle) - start_mcycle;
   uart_puts(uart, "\r\nSoftware sign\r\n");
   for(int i = 0; i < 16; i++)
     uart_put_hex(uart, *((uint32_t*)sanctum_sm_signature+i));
+  uart_puts(uart, "\r\nTime calculation: ");
+  uart_put_hex(uart, delta_mcycle);
+  start_mcycle = read_csr(mcycle);
   hw_ed25519_sign(sanctum_sm_signature, scratchpad, 64 + 32, sanctum_dev_public_key, sanctum_dev_secret_key, 1);
+  delta_mcycle = read_csr(mcycle) - start_mcycle;
   uart_puts(uart, "\r\nHardware sign\r\n");
   for(int i = 0; i < 16; i++)
     uart_put_hex(uart, *((uint32_t*)sanctum_sm_signature+i));
+  uart_puts(uart, "\r\nTime calculation: ");
+  uart_put_hex(uart, delta_mcycle);
 #endif
 
   // Clean up
@@ -693,10 +713,10 @@ void secure_boot_main(){
 
 #ifdef TEEHW
   // Measure the time
-  unsigned long delta_mcycle = read_csr(mcycle) - start_mcycle;
+  delta_mcycle = read_csr(mcycle) - start_mcycle;
 
   //unsigned long msecs = delta_mcycle/F_CLK;
-  uart_puts(uart, "Miliseconds signing: \r\n");
+  uart_puts(uart, "\r\nMiliseconds signing: \r\n");
   uart_put_hex(uart, delta_mcycle);
   uart_puts(uart, "\r\n");
 
