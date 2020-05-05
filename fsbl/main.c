@@ -524,6 +524,9 @@ extern byte sanctum_sm_public_key[32];
 extern byte sanctum_sm_secret_key[64];
 extern byte sanctum_sm_signature[64];
 #define DRAM_BASE 0x80000000
+#ifdef TEEHW
+byte sanctum_sm_public_key_hw[32];
+#endif
 
 /* Update this to generate valid entropy for target platform*/
 inline byte random_byte(unsigned int i) {
@@ -653,11 +656,36 @@ void secure_boot_main(){
   // Derive {SK_D, PK_D} (device keys) from the first 32 B of the hash (NIST endorses SHA512 truncation as safe)
   ed25519_create_keypair(sanctum_sm_public_key, sanctum_sm_secret_key, scratchpad);
 
+#ifdef TEEHW
+  uart_puts(uart, "\r\nSoftware public key\r\n");
+  for(int i = 0; i < 8; i++)
+    uart_put_hex(uart, *((uint32_t*)sanctum_sm_public_key+i));
+  uart_puts(uart, "\r\nSoftware private key\r\n");
+  for(int i = 0; i < 16; i++)
+    uart_put_hex(uart, *((uint32_t*)sanctum_sm_secret_key+i));
+  hw_ed25519_create_keypair(sanctum_sm_public_key_hw, sanctum_sm_secret_key, scratchpad);
+  uart_puts(uart, "\r\nHardware public key\r\n");
+  for(int i = 0; i < 8; i++)
+    uart_put_hex(uart, *((uint32_t*)sanctum_sm_public_key_hw+i));
+  uart_puts(uart, "\r\nHardware private key\r\n");
+  for(int i = 0; i < 16; i++)
+    uart_put_hex(uart, *((uint32_t*)sanctum_sm_secret_key+i));
+#endif
+
   // Endorse the SM
   memcpy(scratchpad, sanctum_sm_hash, 64);
   memcpy(scratchpad + 64, sanctum_sm_public_key, 32);
   // Sign (H_SM, PK_SM) with SK_D
   ed25519_sign(sanctum_sm_signature, scratchpad, 64 + 32, sanctum_dev_public_key, sanctum_dev_secret_key);
+#ifdef TEEHW
+  uart_puts(uart, "\r\nSoftware sign\r\n");
+  for(int i = 0; i < 16; i++)
+    uart_put_hex(uart, *((uint32_t*)sanctum_sm_signature+i));
+  hw_ed25519_sign(sanctum_sm_signature, scratchpad, 64 + 32, sanctum_dev_public_key, sanctum_dev_secret_key, 1);
+  uart_puts(uart, "\r\nHardware sign\r\n");
+  for(int i = 0; i < 16; i++)
+    uart_put_hex(uart, *((uint32_t*)sanctum_sm_signature+i));
+#endif
 
   // Clean up
   // Erase SK_D

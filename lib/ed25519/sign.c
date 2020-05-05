@@ -12,8 +12,8 @@
 void ed25519_sign(unsigned char *signature, const unsigned char *message, size_t message_len, const unsigned char *public_key, const unsigned char *private_key) {
 #ifndef TEEHW
     sha3_ctx_t hash;
-    ge_p3 R;
 #endif
+    ge_p3 R;
     unsigned char hram[64];
     unsigned char r[64];
 
@@ -23,7 +23,6 @@ void ed25519_sign(unsigned char *signature, const unsigned char *message, size_t
     sha3_update(&hash, message, message_len);
     sha3_final(r, &hash);
 #else
-    uint32_t *sig = (uint32_t*)signature;
     hwsha3_init();
     hwsha3_update(private_key + 32, 32);
     hwsha3_final(r, message, message_len);
@@ -31,22 +30,49 @@ void ed25519_sign(unsigned char *signature, const unsigned char *message, size_t
 
     sc_reduce(r);
 
-#ifndef TEEHW
     ge_scalarmult_base(&R, r);
     ge_p3_tobytes(signature, &R);
 
+#ifndef TEEHW
     sha3_init(&hash, 64);
     sha3_update(&hash, signature, 32);
     sha3_update(&hash, public_key, 32);
     sha3_update(&hash, message, message_len);
     sha3_final(hram, &hash);
+#else
+    hwsha3_init();
+    hwsha3_update(signature, 32);
+    hwsha3_update(public_key, 32);
+    hwsha3_final(hram, message, message_len);
+#endif
 
     sc_reduce(hram);
     sc_muladd(signature + 32, hram, private_key, r);
-#else
+}
+
+#ifdef TEEHW
+void hw_ed25519_sign(unsigned char *signature, const unsigned char *message, size_t message_len, const unsigned char *public_key, const unsigned char *private_key, char red) {
+    unsigned char hram[64];
+    unsigned char r[64];
+    unsigned char rred[64];
+    uint32_t *sig = (uint32_t*)signature;
+
+    // Remember that private_key is already hashed (hashkey)
+
+    // Hash S and M (hashsm)
+    hwsha3_init();
+    hwsha3_update(private_key + 32, 32);
+    hwsha3_final(r, message, message_len);
+    for(int i = 0; i < 16; i++) {
+        *(((uint32_t*)(rred)) + i) = *(((uint32_t*)(r)) + i);
+    }
+    if(red) sc_reduce(rred);
+
+    // Calculate the R part with a base-point multiplier (in hw)
+#ifndef ED25519_DIR
     for(int i = 0; i < 8; i++) {
         ED25519_REG(ED25519_REG_ADDR_K) = i;
-        ED25519_REG(ED25519_REG_DATA_K) = *(((uint32_t*)(r)) + i);
+        ED25519_REG(ED25519_REG_DATA_K) = *(((uint32_t*)(rred)) + i);
     }
     ED25519_REG(ED25519_REG_STATUS) = 1; // Use the K memory
     while(!(ED25519_REG(ED25519_REG_STATUS) & 0x4)); // Wait
@@ -54,6 +80,16 @@ void ed25519_sign(unsigned char *signature, const unsigned char *message, size_t
         ED25519_REG(ED25519_REG_ADDR_QY) = i;
         sig[i] = ED25519_REG(ED25519_REG_DATA_QY);
     }
+#else
+    for(int i = 0; i < 8; i++) {
+        ED25519_REG(ED25519_REG_DATA_K + i*4) = *(((uint32_t*)(r)) + i);
+    }
+    ED25519_REG(ED25519_REG_STATUS) = 1; // Use the K memory
+    while(!(ED25519_REG(ED25519_REG_STATUS) & 0x4)); // Wait
+    for(int i = 0; i < 8; i++) {
+        sig[i] = ED25519_REG(ED25519_REG_DATA_QY + i*4);
+    }
+#endif
 
     // Calculate the H(R, A, M)
     hwsha3_init();
@@ -76,5 +112,5 @@ void ed25519_sign(unsigned char *signature, const unsigned char *message, size_t
     for(int i = 0; i < 8; i++) {
         sig[i+8] = ED25519_REG(ED25519_REG_DATA_SIGN + i*4);
     }
-#endif
 }
+#endif
