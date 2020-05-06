@@ -54,3 +54,22 @@ void uart_put_hex64(void *uartctrl, uint64_t hex){
   uart_put_hex(uartctrl,hex&0xFFFFFFFF);
 }
 
+
+void uart_put_dec(void* uartctrl, uint32_t dec) {
+  char p[10];
+  uint32_t num = dec;
+  if(num==0) uart_putc(uartctrl, '0');
+  else {
+    for(int i=9; i>=0; i--) {
+      p[i] = '0' + num%10;
+      num = num/10;
+    }
+    int flag=0;
+    for(int i=0; i<10; i++) {
+      if((p[i]!='0')||(flag==1)) {
+        uart_putc(uartctrl, p[i]);
+        flag = 1;
+      }
+    }
+  }
+}

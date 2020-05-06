@@ -14,6 +14,7 @@ char uart_getc(void* uartctrl);
 void uart_puts(void* uartctrl, const char * s);
 void uart_put_hex(void* uartctrl, uint32_t hex);
 void uart_put_hex64(void* ua64ctrl, uint64_t hex);
+void uart_put_dec(void* uartctrl, uint32_t dec);
 
 #endif /* !__ASSEMBLER__ */
 
