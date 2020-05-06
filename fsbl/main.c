@@ -503,10 +503,13 @@ int main(int id, unsigned long dtb)
   puts("Loading boot payload");
   ux00boot_load_gpt_partition((void*) PAYLOAD_DEST, &gpt_guid_sifive_bare_metal, peripheral_input_khz);
 
+#ifndef TEEHW
   puts("\r\n\n");
+#else
+  puts("\r\n\n\nWelcome to TEE-HW Bootloader\r\n\n");
+#endif
 
   secure_boot_main();
-
   slave_main(0, dtb);
 
   //dead code
@@ -524,9 +527,6 @@ extern byte sanctum_sm_public_key[32];
 extern byte sanctum_sm_secret_key[64];
 extern byte sanctum_sm_signature[64];
 #define DRAM_BASE 0x80000000
-#ifdef TEEHW
-byte sanctum_sm_public_key_hw[32];
-#endif
 
 /* Update this to generate valid entropy for target platform*/
 inline byte random_byte(unsigned int i) {
@@ -574,35 +574,353 @@ void hwsha3_final(byte* hash, void* data, size_t size) {
     *(((uint64_t*)hash) + i) = *(((uint64_t*)(SHA3_CTRL_ADDR+SHA3_REG_HASH_0)) + i);
   }
 }
+
+void hwsha3_test() {
+  #include "use_test_keys.h"
+  //*sanctum_sm_size = 0x200;
+  // Reserve stack space for secrets
+  byte pad[128], swpad[64];
+  uint32_t* hs = (uint32_t*)pad;
+  sha3_ctx_t hash_ctx;
+  unsigned long start_mcycle;
+  unsigned long delta_mcycle;
+  void *uart = (void*)UART0_CTRL_ADDR;
+  unsigned long tclk = F_CLK; //at KHz
+  tclk = 1000000/tclk; //at ns
+
+  uart_puts(uart,"Begin SHA-3 hardware test:\r\n\n");
+
+  start_mcycle = read_csr(mcycle);
+  sha3_init(&hash_ctx, 64);
+  sha3_update(&hash_ctx, (void*)DRAM_BASE, sanctum_sm_size);
+  sha3_final(sanctum_sm_hash, &hash_ctx);
+  sha3_init(&hash_ctx, 64);
+  sha3_update(&hash_ctx, sanctum_dev_secret_key, sizeof(*sanctum_dev_secret_key));
+  sha3_update(&hash_ctx, sanctum_sm_hash, sizeof(*sanctum_sm_hash));
+  sha3_final(pad, &hash_ctx);
+  delta_mcycle = read_csr(mcycle) - start_mcycle;
+  delta_mcycle = delta_mcycle*tclk/1000; //at us
+  uart_puts(uart, "Software: ");
+  uart_put_dec(uart, delta_mcycle/1000000);
+  uart_puts(uart,"s ");
+  uart_put_dec(uart, (delta_mcycle%1000000)/1000);
+  uart_puts(uart,"ms ");
+  uart_put_dec(uart, delta_mcycle%1000);
+  uart_puts(uart,"us\r\n");
+  for(int i=16; i<32; i++)
+    uart_put_hex(uart, *(hs+i));
+  for(int i=0; i<64; i++)
+    swpad[i] = pad[i+64];
+  uart_puts(uart,"\r\n\n");
+
+  start_mcycle = read_csr(mcycle);
+  hwsha3_init();
+  hwsha3_final(sanctum_sm_hash, (void*)DRAM_BASE, sanctum_sm_size);
+  hwsha3_init();
+  hwsha3_update(sanctum_dev_secret_key, sizeof(*sanctum_dev_secret_key));
+  hwsha3_final(pad, sanctum_sm_hash, sizeof(*sanctum_sm_hash));
+  delta_mcycle = read_csr(mcycle) - start_mcycle;
+  delta_mcycle = delta_mcycle*tclk/1000; //at us
+  uart_puts(uart, "Hardware: ");
+  uart_put_dec(uart, delta_mcycle/1000000);
+  uart_puts(uart,"s ");
+  uart_put_dec(uart, (delta_mcycle%1000000)/1000);
+  uart_puts(uart,"ms ");
+  uart_put_dec(uart, delta_mcycle%1000);
+  uart_puts(uart,"us\r\n");
+  for(int i=16; i<32; i++)
+    uart_put_hex(uart, *(hs+i));
+  uart_puts(uart,"\r\n\n");
+
+  for(int i=0; i<64; i++)
+    if(swpad[i]!=pad[i+64]) {
+      uart_puts(uart,"SHA-3 hardware test fail!\r\n\n\n");
+      return;
+    }
+  uart_puts(uart,"SHA-3 hardware test passed!\r\n\n\n");
+}
+
+void hwed25519_test() {
+  byte scratchpad[128], scratchpad_hw[128];
+  unsigned long start_mcycle;
+  unsigned long delta_mcycle;
+  void *uart = (void*)UART0_CTRL_ADDR;
+  unsigned long tclk = F_CLK; //at KHz
+  tclk = 1000000/tclk; //at ns
+  byte sanctum_sm_public_key_hw[32];
+  byte sanctum_sm_secret_key_hw[64];
+  byte sanctum_sm_signature_hw[64];
+
+  uart_puts(uart,"Begin ED25519 hardware test:\r\n\n");
+
+  // Create a random seed for keys and nonces from TRNG
+  for (unsigned int i=0; i<32; i++) {
+    scratchpad[i] = random_byte(i);
+    scratchpad_hw[i] = scratchpad[i];
+  }
+
+  start_mcycle = read_csr(mcycle);
+  ed25519_create_keypair(sanctum_sm_public_key, sanctum_sm_secret_key, scratchpad);
+  delta_mcycle = read_csr(mcycle) - start_mcycle;
+  delta_mcycle = delta_mcycle*tclk/1000; //at us
+  uart_puts(uart, "Software gen key: ");
+  uart_put_dec(uart, delta_mcycle/1000000);
+  uart_puts(uart,"s ");
+  uart_put_dec(uart, (delta_mcycle%1000000)/1000);
+  uart_puts(uart,"ms ");
+  uart_put_dec(uart, delta_mcycle%1000);
+  uart_puts(uart,"us\r\nPublic key: ");
+  for(int i = 0; i < 8; i++)
+    uart_put_hex(uart, *((uint32_t*)sanctum_sm_public_key+i));
+  uart_puts(uart, "\r\nPrivate key: ");
+  for(int i = 0; i < 16; i++)
+    uart_put_hex(uart, *((uint32_t*)sanctum_sm_secret_key+i));
+
+  start_mcycle = read_csr(mcycle);
+  hw_ed25519_create_keypair(sanctum_sm_public_key_hw, sanctum_sm_secret_key_hw, scratchpad_hw);
+  delta_mcycle = read_csr(mcycle) - start_mcycle;
+  delta_mcycle = delta_mcycle*tclk/1000; //at us
+  uart_puts(uart, "\r\n\nHardware gen key: ");
+  uart_put_dec(uart, delta_mcycle/1000000);
+  uart_puts(uart,"s ");
+  uart_put_dec(uart, (delta_mcycle%1000000)/1000);
+  uart_puts(uart,"ms ");
+  uart_put_dec(uart, delta_mcycle%1000);
+  uart_puts(uart,"us\r\n");
+  uart_puts(uart,"Public key: ");
+  for(int i = 0; i < 8; i++)
+    uart_put_hex(uart, *((uint32_t*)sanctum_sm_public_key_hw+i));
+  uart_puts(uart, "\r\nPrivate key: ");
+  for(int i = 0; i < 16; i++)
+    uart_put_hex(uart, *((uint32_t*)sanctum_sm_secret_key_hw+i));
+
+  memcpy(scratchpad, sanctum_sm_hash, 64);
+  memcpy(scratchpad + 64, sanctum_sm_public_key, 32);
+  memcpy(scratchpad_hw, sanctum_sm_hash, 64);
+  memcpy(scratchpad_hw + 64, sanctum_sm_public_key_hw, 32);
+
+  start_mcycle = read_csr(mcycle);
+  ed25519_sign(sanctum_sm_signature, scratchpad, 64 + 32, sanctum_dev_public_key, sanctum_dev_secret_key);
+  delta_mcycle = read_csr(mcycle) - start_mcycle;
+  delta_mcycle = delta_mcycle*tclk/1000; //at us
+  uart_puts(uart, "\r\n\nSoftware sign: ");
+  uart_put_dec(uart, delta_mcycle/1000000);
+  uart_puts(uart,"s ");
+  uart_put_dec(uart, (delta_mcycle%1000000)/1000);
+  uart_puts(uart,"ms ");
+  uart_put_dec(uart, delta_mcycle%1000);
+  uart_puts(uart,"us\r\n");
+  for(int i = 0; i < 16; i++)
+    uart_put_hex(uart, *((uint32_t*)sanctum_sm_signature+i));
+
+  start_mcycle = read_csr(mcycle);
+  hw_ed25519_sign(sanctum_sm_signature_hw, scratchpad_hw, 64 + 32, sanctum_dev_public_key, sanctum_dev_secret_key, 1);
+  delta_mcycle = read_csr(mcycle) - start_mcycle;
+  delta_mcycle = delta_mcycle*tclk/1000; //at us
+  uart_puts(uart, "\r\n\nHardware sign: ");
+  uart_put_dec(uart, delta_mcycle/1000000);
+  uart_puts(uart,"s ");
+  uart_put_dec(uart, (delta_mcycle%1000000)/1000);
+  uart_puts(uart,"ms ");
+  uart_put_dec(uart, delta_mcycle%1000);
+  uart_puts(uart,"us\r\n");
+  for(int i = 0; i < 16; i++)
+    uart_put_hex(uart, *((uint32_t*)sanctum_sm_signature_hw+i));
+  uart_puts(uart,"\r\n\n");
+
+  for(int i=0; i<32; i++) {
+    if(sanctum_sm_public_key[i]!=sanctum_sm_public_key_hw[i]) {
+      uart_puts(uart,"ED25519 hardware test fail!\r\n\n\n");
+      return;
+    }
+  }
+  for(int i=0; i<64; i++) {
+    if(sanctum_sm_secret_key[i]!=sanctum_sm_secret_key_hw[i]) {
+      uart_puts(uart,"ED25519 hardware test fail!\r\n\n\n");
+      return;
+    }
+  }
+  for(int i=0; i<64; i++) {
+    if(sanctum_sm_signature[i]!=sanctum_sm_signature_hw[i]) {
+      uart_puts(uart,"ED25519 hardware test fail!\r\n\n\n");
+      return;
+    }
+  }
+  uart_puts(uart,"ED25519 hardware test passed!\r\n\n\n");
+}
+
+void hwaes_test() {
+  unsigned long start_mcycle;
+  unsigned long delta_mcycle;
+  void *uart = (void*)UART0_CTRL_ADDR;
+  unsigned long tclk = F_CLK; //at KHz
+  tclk = 1000000/tclk; //at ns
+
+  // Vectors extracted from the tiny AES test.c file in AES128 mode
+  uint8_t aeskey[] = { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
+  //uint8_t aesout[] = { 0x3a, 0xd7, 0x7b, 0xb4, 0x0d, 0x7a, 0x36, 0x60, 0xa8, 0x9e, 0xca, 0xf3, 0x24, 0x66, 0xef, 0x97 };
+  uint8_t aesin1[] = { 0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a };
+  uint8_t aesin2[] = { 0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a };
+  struct AES_ctx ctx;
+
+  uart_puts(uart,"Begin AES hardware test:\r\n\n");
+
+  // Software encrypt AES128
+  start_mcycle = read_csr(mcycle);
+  AES_init_ctx(&ctx, aeskey);
+  AES_ECB_encrypt(&ctx, aesin1);
+  delta_mcycle = read_csr(mcycle) - start_mcycle;
+  delta_mcycle = delta_mcycle*tclk/1000; //at us
+  uart_puts(uart, "Software: ");
+  uart_put_dec(uart, delta_mcycle/1000000);
+  uart_puts(uart,"s ");
+  uart_put_dec(uart, (delta_mcycle%1000000)/1000);
+  uart_puts(uart,"ms ");
+  uart_put_dec(uart, delta_mcycle%1000);
+  uart_puts(uart,"us\r\n");
+  for(int i = 0; i < 4; i++)
+    uart_put_hex(uart, *((uint32_t*)aesin1+i));
+
+  // Hardware encrypt AES128
+  start_mcycle = read_csr(mcycle);
+  // Put the key (only 128 bits lower)
+  for(int i = 0; i < 4; i++)
+    AES_REG(AES_REG_KEY + i*4) = *((uint32_t*)aeskey+i);
+  for(int i = 4; i < 8; i++)
+    AES_REG(AES_REG_KEY + i*4) = 0; // Clean the "other part" of the key, "just in case"
+  AES_REG(AES_REG_CONFIG) = 1; // AES128, encrypt
+  AES_REG(AES_REG_STATUS) = 1; // Key Expansion Enable
+  while(!(AES_REG(AES_REG_STATUS) & 0x4)); // Wait for ready
+  // Put the data
+  for(int i = 0; i < 4; i++)
+    AES_REG(AES_REG_BLOCK + i*4) = *((uint32_t*)aesin2+i);
+  AES_REG(AES_REG_STATUS) = 2; // Data enable
+  while(!(AES_REG(AES_REG_STATUS) & 0x4)); // Wait for ready
+  // Copy back the data to the pointer
+  for(int i = 0; i < 4; i++)
+    *((uint32_t*)aesin2+i) = AES_REG(AES_REG_RESULT + i*4);
+  delta_mcycle = read_csr(mcycle) - start_mcycle;
+  delta_mcycle = delta_mcycle*tclk/1000; //at us
+  uart_puts(uart, "\r\n\nHardware: ");
+  uart_put_dec(uart, delta_mcycle/1000000);
+  uart_puts(uart,"s ");
+  uart_put_dec(uart, (delta_mcycle%1000000)/1000);
+  uart_puts(uart,"ms ");
+  uart_put_dec(uart, delta_mcycle%1000);
+  uart_puts(uart,"us\r\n");
+  for(int i = 0; i < 4; i++)
+    uart_put_hex(uart, *((uint32_t*)aesin2+i));
+  uart_puts(uart,"\r\n\n");
+
+  for(int i=0; i<16; i++) {
+    if(aesin1[i]!=aesin2[i]) {
+      uart_puts(uart,"AES hardware test fail!\r\n\n\n");
+      return;
+    }
+  }
+  uart_puts(uart,"AES hardware test passed!\r\n\n\n");
+}
+
+void hwrng_test() {
+  void *uart = (void*)UART0_CTRL_ADDR;
+  uart_puts(uart,"Begin RNG hardware test:\r\n");
+  uart_puts(uart,"Now begin RNG 16 times in a row:\r\n");
+
+  // Random number generation
+  // Reset first the TRNG
+  RANDOM_REG(RANDOM_RND_SOURCE_ENABLE) = 0;
+  RANDOM_REG(RANDOM_TRNG_SW_RESET) = 1;
+  while(RANDOM_REG(RANDOM_TRNG_BUSY));
+  // Put the sampling to a odd number (remember that is a LFSR16 anyways)
+  RANDOM_REG(RANDOM_SAMPLE_CNT1) = 29;
+  for(int ii = 0; ii < 16; ii++) {
+    // Enable the random number generator
+    RANDOM_REG(RANDOM_RND_SOURCE_ENABLE) = 1;
+    // Wait until we have the random number
+    while(!RANDOM_REG(RANDOM_TRNG_VALID));
+    // Get our random
+    for(int i = 0; i < 6; i++)
+      uart_put_hex(uart, RANDOM_REG(RANDOM_EHR_DATA0 + i*4));
+    uart_puts(uart,"\r\n");
+    // Reset the sampling counters only
+    RANDOM_REG(RANDOM_RND_SOURCE_ENABLE) = 0;
+    RANDOM_REG(RANDOM_RST_BITS_COUNTER) = 1;
+    while(RANDOM_REG(RANDOM_TRNG_BUSY));
+  }
+  uart_puts(uart,"\n\n");
+}
 #endif
 
 void secure_boot_main(){
   //*sanctum_sm_size = 0x200;
   // Reserve stack space for secrets
   byte scratchpad[128];
+#ifndef TEEHW
   sha3_ctx_t hash_ctx;
-#ifdef TEEHW
+#else
   void *uart = (void*)UART0_CTRL_ADDR;
-  uart_puts(uart, "Hello world, FSBL\r\n");
-
-  // Test the hardware with the software SHA3
-  byte hash[64];
-  uint32_t* hs = (uint32_t*)hash;
-  sha3_init(&hash_ctx, 64);
-  sha3_update(&hash_ctx, (void*)"FOX1", 4);
-  sha3_final(hash, &hash_ctx);
-  for(int i = 0; i < 16; i++)
-     uart_put_hex(uart, *(hs+i));
-  uart_puts(uart, "\r\n");
-
-  hwsha3_init(&hash_ctx);
-  hwsha3_final(hash, (void*)"FOX1", 4);
-  for(int i = 0; i < 16; i++)
-     uart_put_hex(uart, *(hs+i));
-  uart_puts(uart, "\r\n");
-
-  unsigned long start_mcycle = read_csr(mcycle);
+  unsigned long start_mcycle;
   unsigned long delta_mcycle;
+  char cod;
+
+  while(1) {
+    cod = 255;
+    puts("Press 'a' to run ALL     hardware tests\r\n");
+    puts("Press '1' to run SHA-3   hardware test\r\n");
+    puts("Press '2' to run ED25519 hardware test\r\n");
+    puts("Press '3' to run AES     hardware test\r\n");
+    puts("Press '4' to run RNG     hardware test\r\n");
+    puts("Press 'u' to run USB1.1  driver   test\r\n\n");
+    puts("Press ENTER to boot Linux   ");
+    for(int i=5; i>0; i--) {
+      uart_put_dec(uart,i);
+      start_mcycle = read_csr(mcycle);
+      do {
+        int32_t val = (int32_t) _REG32(uart, UART_REG_RXFIFO);
+        if(val>=0) {
+          cod = val & 0xFF;
+          break;
+        }
+        delta_mcycle = read_csr(mcycle) - start_mcycle;
+      } while(delta_mcycle < TL_CLK);
+      if(cod==255) uart_putc(uart,'\b');
+      else break;
+    }
+    switch(cod) {
+      case 'a':
+        puts("\r\n\n\nGot 'a'\r\n");
+        hwsha3_test();
+        hwed25519_test();
+        hwaes_test();
+        hwrng_test();
+        continue;
+      case '1':
+        puts("\r\n\n\nGot '1'\r\n");
+        hwsha3_test();
+        continue;
+      case '2':
+        puts("\r\n\n\nGot '2'\r\n");
+        hwed25519_test();
+        continue;
+      case '3':
+        puts("\r\n\n\nGot '3'\r\n");
+        hwaes_test();
+        continue;
+      case '4':
+        puts("\r\n\n\nGot '4'\r\n");
+        hwrng_test();
+        continue;
+      case 'u':
+        puts("\r\n\n\nGot 'u'\r\n");
+        uart_puts(uart, "Entering USB test\r\n");
+        usb_test();
+        continue;
+      case 255:
+        uart_putc(uart,'0');
+    }
+    puts("\r\n\n\n");
+    break;
+  }
 #endif
 
   // TODO: on real device, copy boot image from memory. In simulator, HTIF writes boot image
@@ -633,9 +951,7 @@ void secure_boot_main(){
   //ed25519_create_keypair(sanctum_dev_public_key, sanctum_dev_secret_key, scratchpad);
 
   // Measure SM
-#ifdef TEEHW
-  start_mcycle = read_csr(mcycle);
-#endif
+#ifndef TEEHW
   sha3_init(&hash_ctx, 64);
   sha3_update(&hash_ctx, (void*)DRAM_BASE, sanctum_sm_size);
   sha3_final(sanctum_sm_hash, &hash_ctx);
@@ -646,12 +962,7 @@ void secure_boot_main(){
   sha3_update(&hash_ctx, sanctum_dev_secret_key, sizeof(*sanctum_dev_secret_key));
   sha3_update(&hash_ctx, sanctum_sm_hash, sizeof(*sanctum_sm_hash));
   sha3_final(scratchpad, &hash_ctx);
-#ifdef TEEHW
-  delta_mcycle = read_csr(mcycle) - start_mcycle;
-  uart_puts(uart, "\r\nTime hashing in software: ");
-  uart_put_hex(uart, delta_mcycle);
-
-  start_mcycle = read_csr(mcycle);
+#else
   hwsha3_init();
   hwsha3_final(sanctum_sm_hash, (void*)DRAM_BASE, sanctum_sm_size);
 
@@ -660,151 +971,28 @@ void secure_boot_main(){
   hwsha3_init();
   hwsha3_update(sanctum_dev_secret_key, sizeof(*sanctum_dev_secret_key));
   hwsha3_final(scratchpad, sanctum_sm_hash, sizeof(*sanctum_sm_hash));
-  delta_mcycle = read_csr(mcycle) - start_mcycle;
-  uart_puts(uart, "\r\nTime hashing in hardware: ");
-  uart_put_hex(uart, delta_mcycle);
-
-  start_mcycle = read_csr(mcycle);
 #endif
   // Derive {SK_D, PK_D} (device keys) from the first 32 B of the hash (NIST endorses SHA512 truncation as safe)
+#ifndef TEEHW
   ed25519_create_keypair(sanctum_sm_public_key, sanctum_sm_secret_key, scratchpad);
-#ifdef TEEHW
-  delta_mcycle = read_csr(mcycle) - start_mcycle;
-  uart_puts(uart, "\r\nSoftware public key\r\n");
-  for(int i = 0; i < 8; i++)
-    uart_put_hex(uart, *((uint32_t*)sanctum_sm_public_key+i));
-  uart_puts(uart, "\r\nSoftware private key\r\n");
-  for(int i = 0; i < 16; i++)
-    uart_put_hex(uart, *((uint32_t*)sanctum_sm_secret_key+i));
-  uart_puts(uart, "\r\nTime calculation: ");
-  uart_put_hex(uart, delta_mcycle);
-
-  start_mcycle = read_csr(mcycle);
-  hw_ed25519_create_keypair(sanctum_sm_public_key_hw, sanctum_sm_secret_key, scratchpad);
-  delta_mcycle = read_csr(mcycle) - start_mcycle;
-  uart_puts(uart, "\r\nHardware public key\r\n");
-  for(int i = 0; i < 8; i++)
-    uart_put_hex(uart, *((uint32_t*)sanctum_sm_public_key_hw+i));
-  uart_puts(uart, "\r\nHardware private key\r\n");
-  for(int i = 0; i < 16; i++)
-    uart_put_hex(uart, *((uint32_t*)sanctum_sm_secret_key+i));
-  uart_puts(uart, "\r\nTime calculation: ");
-  uart_put_hex(uart, delta_mcycle);
+#else
+  hw_ed25519_create_keypair(sanctum_sm_public_key, sanctum_sm_secret_key, scratchpad);
 #endif
 
   // Endorse the SM
   memcpy(scratchpad, sanctum_sm_hash, 64);
   memcpy(scratchpad + 64, sanctum_sm_public_key, 32);
 
-#ifdef TEEHW
-start_mcycle = read_csr(mcycle);
-#endif
   // Sign (H_SM, PK_SM) with SK_D
+#ifndef TEEHW
   ed25519_sign(sanctum_sm_signature, scratchpad, 64 + 32, sanctum_dev_public_key, sanctum_dev_secret_key);
-#ifdef TEEHW
-  delta_mcycle = read_csr(mcycle) - start_mcycle;
-  uart_puts(uart, "\r\nSoftware sign\r\n");
-  for(int i = 0; i < 16; i++)
-    uart_put_hex(uart, *((uint32_t*)sanctum_sm_signature+i));
-  uart_puts(uart, "\r\nTime calculation: ");
-  uart_put_hex(uart, delta_mcycle);
-  start_mcycle = read_csr(mcycle);
+#else
   hw_ed25519_sign(sanctum_sm_signature, scratchpad, 64 + 32, sanctum_dev_public_key, sanctum_dev_secret_key, 1);
-  delta_mcycle = read_csr(mcycle) - start_mcycle;
-  uart_puts(uart, "\r\nHardware sign\r\n");
-  for(int i = 0; i < 16; i++)
-    uart_put_hex(uart, *((uint32_t*)sanctum_sm_signature+i));
-  uart_puts(uart, "\r\nTime calculation: ");
-  uart_put_hex(uart, delta_mcycle);
 #endif
 
   // Clean up
   // Erase SK_D
   memset((void*)sanctum_dev_secret_key, 0, sizeof(*sanctum_sm_secret_key));
-
-#ifdef TEEHW
-  // Measure the time
-  delta_mcycle = read_csr(mcycle) - start_mcycle;
-
-  //unsigned long msecs = delta_mcycle/F_CLK;
-  uart_puts(uart, "\r\nTime signing: \r\n");
-  uart_put_hex(uart, delta_mcycle);
-  uart_puts(uart, "\r\n");
-
-  // Vectors extracted from the tiny AES test.c file in AES128 mode
-  uint8_t aeskey[] = { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
-  //uint8_t aesout[] = { 0x3a, 0xd7, 0x7b, 0xb4, 0x0d, 0x7a, 0x36, 0x60, 0xa8, 0x9e, 0xca, 0xf3, 0x24, 0x66, 0xef, 0x97 };
-  uint8_t aesin1[] = { 0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a };
-  uint8_t aesin2[] = { 0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a };
-  struct AES_ctx ctx;
-
-  // Software encrypt AES128
-  start_mcycle = read_csr(mcycle);
-  AES_init_ctx(&ctx, aeskey);
-  AES_ECB_encrypt(&ctx, aesin1);
-  delta_mcycle = read_csr(mcycle) - start_mcycle;
-  uart_puts(uart, "\r\nSoftware encrypt (AES128)\r\n");
-  for(int i = 0; i < 4; i++)
-    uart_put_hex(uart, *((uint32_t*)aesin1+i));
-  uart_puts(uart, "\r\nTime calculation: ");
-  uart_put_hex(uart, delta_mcycle);
-
-  // Hardware encrypt AES128
-  start_mcycle = read_csr(mcycle);
-  // Put the key (only 128 bits lower)
-  for(int i = 0; i < 4; i++)
-    AES_REG(AES_REG_KEY + i*4) = *((uint32_t*)aeskey+i);
-  for(int i = 4; i < 8; i++)
-    AES_REG(AES_REG_KEY + i*4) = 0; // Clean the "other part" of the key, "just in case"
-  AES_REG(AES_REG_CONFIG) = 1; // AES128, encrypt
-  AES_REG(AES_REG_STATUS) = 1; // Key Expansion Enable
-  while(!(AES_REG(AES_REG_STATUS) & 0x4)); // Wait for ready
-  // Put the data
-  for(int i = 0; i < 4; i++)
-    AES_REG(AES_REG_BLOCK + i*4) = *((uint32_t*)aesin2+i);
-  AES_REG(AES_REG_STATUS) = 2; // Data enable
-  while(!(AES_REG(AES_REG_STATUS) & 0x4)); // Wait for ready
-  // Copy back the data to the pointer
-  for(int i = 0; i < 4; i++)
-    *((uint32_t*)aesin2+i) = AES_REG(AES_REG_RESULT + i*4);
-  delta_mcycle = read_csr(mcycle) - start_mcycle;
-  uart_puts(uart, "\r\nHardware encrypt (AES128)\r\n");
-  for(int i = 0; i < 4; i++)
-    uart_put_hex(uart, *((uint32_t*)aesin2+i));
-  uart_puts(uart, "\r\nTime calculation: ");
-  uart_put_hex(uart, delta_mcycle);
-
-  // Random number generation
-  // Reset first the TRNG
-  RANDOM_REG(RANDOM_RND_SOURCE_ENABLE) = 0;
-  RANDOM_REG(RANDOM_TRNG_SW_RESET) = 1;
-  while(RANDOM_REG(RANDOM_TRNG_BUSY));
-  // Put the sampling to a odd number (remember that is a LFSR16 anyways)
-  RANDOM_REG(RANDOM_SAMPLE_CNT1) = 29;
-  for(int ii = 0; ii < 20; ii++) {
-    uart_puts(uart, "\r\nRandom:\r\n");
-    // Enable the random number generator
-    RANDOM_REG(RANDOM_RND_SOURCE_ENABLE) = 1;
-    // Wait until we have the random number
-    while(!RANDOM_REG(RANDOM_TRNG_VALID));
-    // Get our random
-    for(int i = 0; i < 6; i++) 
-      uart_put_hex(uart, RANDOM_REG(RANDOM_EHR_DATA0 + i*4));
-    // Reset the sampling counters only
-    RANDOM_REG(RANDOM_RND_SOURCE_ENABLE) = 0;
-    RANDOM_REG(RANDOM_RST_BITS_COUNTER) = 1;
-    while(RANDOM_REG(RANDOM_TRNG_BUSY));
-  }
-
-  uart_puts(uart, "\r\nPut 'u' for usb_test, any key for boot linux: ");
-  char cod = uart_getc(uart);
-  uart_puts(uart, "\r\n");
-  if(cod == 'u' || cod == 'U') {
-    // USB test
-    uart_puts(uart, "\r\nEntering USB test\r\n");
-    usb_test();
-  }
-#endif
 
   // caller will clean core state and memory (including the stack), and boot.
   return;
