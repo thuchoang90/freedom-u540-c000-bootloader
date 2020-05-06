@@ -1,7 +1,6 @@
 #include "ed25519.h"
-#ifndef TEEHW
 #include "sha3/sha3.h"
-#else
+#ifdef TEEHW
 #include "hwsha3.h"
 #include "sifive/platform.h"
 #endif
