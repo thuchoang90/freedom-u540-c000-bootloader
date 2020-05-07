@@ -575,6 +575,20 @@ void hwsha3_final(byte* hash, void* data, size_t size) {
   }
 }
 
+void print_meas (unsigned long meas) {
+  void *uart = (void*)UART0_CTRL_ADDR;
+  unsigned long tclk = F_CLK; //at KHz
+  tclk = 1000000/tclk; //at ns
+
+  meas = meas*tclk/1000; //at us
+  uart_put_dec(uart, meas/1000000);
+  uart_puts(uart,"s ");
+  uart_put_dec(uart, (meas%1000000)/1000);
+  uart_puts(uart,"ms ");
+  uart_put_dec(uart, meas%1000);
+  uart_puts(uart,"us\r\n");
+}
+
 void hwsha3_test() {
   #include "use_test_keys.h"
   //*sanctum_sm_size = 0x200;
@@ -585,8 +599,6 @@ void hwsha3_test() {
   unsigned long start_mcycle;
   unsigned long delta_mcycle;
   void *uart = (void*)UART0_CTRL_ADDR;
-  unsigned long tclk = F_CLK; //at KHz
-  tclk = 1000000/tclk; //at ns
 
   uart_puts(uart,"Begin SHA-3 hardware test:\r\n\n");
 
@@ -599,14 +611,8 @@ void hwsha3_test() {
   sha3_update(&hash_ctx, sanctum_sm_hash, sizeof(*sanctum_sm_hash));
   sha3_final(pad, &hash_ctx);
   delta_mcycle = read_csr(mcycle) - start_mcycle;
-  delta_mcycle = delta_mcycle*tclk/1000; //at us
   uart_puts(uart, "Software: ");
-  uart_put_dec(uart, delta_mcycle/1000000);
-  uart_puts(uart,"s ");
-  uart_put_dec(uart, (delta_mcycle%1000000)/1000);
-  uart_puts(uart,"ms ");
-  uart_put_dec(uart, delta_mcycle%1000);
-  uart_puts(uart,"us\r\n");
+  print_meas(delta_mcycle);
   for(int i=16; i<32; i++)
     uart_put_hex(uart, *(hs+i));
   for(int i=0; i<64; i++)
@@ -620,14 +626,8 @@ void hwsha3_test() {
   hwsha3_update(sanctum_dev_secret_key, sizeof(*sanctum_dev_secret_key));
   hwsha3_final(pad, sanctum_sm_hash, sizeof(*sanctum_sm_hash));
   delta_mcycle = read_csr(mcycle) - start_mcycle;
-  delta_mcycle = delta_mcycle*tclk/1000; //at us
   uart_puts(uart, "Hardware: ");
-  uart_put_dec(uart, delta_mcycle/1000000);
-  uart_puts(uart,"s ");
-  uart_put_dec(uart, (delta_mcycle%1000000)/1000);
-  uart_puts(uart,"ms ");
-  uart_put_dec(uart, delta_mcycle%1000);
-  uart_puts(uart,"us\r\n");
+  print_meas(delta_mcycle);
   for(int i=16; i<32; i++)
     uart_put_hex(uart, *(hs+i));
   uart_puts(uart,"\r\n\n");
@@ -645,8 +645,6 @@ void hwed25519_test() {
   unsigned long start_mcycle;
   unsigned long delta_mcycle;
   void *uart = (void*)UART0_CTRL_ADDR;
-  unsigned long tclk = F_CLK; //at KHz
-  tclk = 1000000/tclk; //at ns
   byte sanctum_sm_public_key_hw[32];
   byte sanctum_sm_secret_key_hw[64];
   byte sanctum_sm_signature_hw[64];
@@ -662,14 +660,8 @@ void hwed25519_test() {
   start_mcycle = read_csr(mcycle);
   ed25519_create_keypair(sanctum_sm_public_key, sanctum_sm_secret_key, scratchpad);
   delta_mcycle = read_csr(mcycle) - start_mcycle;
-  delta_mcycle = delta_mcycle*tclk/1000; //at us
   uart_puts(uart, "Software gen key: ");
-  uart_put_dec(uart, delta_mcycle/1000000);
-  uart_puts(uart,"s ");
-  uart_put_dec(uart, (delta_mcycle%1000000)/1000);
-  uart_puts(uart,"ms ");
-  uart_put_dec(uart, delta_mcycle%1000);
-  uart_puts(uart,"us\r\nPublic key: ");
+  print_meas(delta_mcycle);
   for(int i = 0; i < 8; i++)
     uart_put_hex(uart, *((uint32_t*)sanctum_sm_public_key+i));
   uart_puts(uart, "\r\nPrivate key: ");
@@ -679,14 +671,8 @@ void hwed25519_test() {
   start_mcycle = read_csr(mcycle);
   hw_ed25519_create_keypair(sanctum_sm_public_key_hw, sanctum_sm_secret_key_hw, scratchpad_hw);
   delta_mcycle = read_csr(mcycle) - start_mcycle;
-  delta_mcycle = delta_mcycle*tclk/1000; //at us
   uart_puts(uart, "\r\n\nHardware gen key: ");
-  uart_put_dec(uart, delta_mcycle/1000000);
-  uart_puts(uart,"s ");
-  uart_put_dec(uart, (delta_mcycle%1000000)/1000);
-  uart_puts(uart,"ms ");
-  uart_put_dec(uart, delta_mcycle%1000);
-  uart_puts(uart,"us\r\n");
+  print_meas(delta_mcycle);
   uart_puts(uart,"Public key: ");
   for(int i = 0; i < 8; i++)
     uart_put_hex(uart, *((uint32_t*)sanctum_sm_public_key_hw+i));
@@ -702,28 +688,16 @@ void hwed25519_test() {
   start_mcycle = read_csr(mcycle);
   ed25519_sign(sanctum_sm_signature, scratchpad, 64 + 32, sanctum_dev_public_key, sanctum_dev_secret_key);
   delta_mcycle = read_csr(mcycle) - start_mcycle;
-  delta_mcycle = delta_mcycle*tclk/1000; //at us
   uart_puts(uart, "\r\n\nSoftware sign: ");
-  uart_put_dec(uart, delta_mcycle/1000000);
-  uart_puts(uart,"s ");
-  uart_put_dec(uart, (delta_mcycle%1000000)/1000);
-  uart_puts(uart,"ms ");
-  uart_put_dec(uart, delta_mcycle%1000);
-  uart_puts(uart,"us\r\n");
+  print_meas(delta_mcycle);
   for(int i = 0; i < 16; i++)
     uart_put_hex(uart, *((uint32_t*)sanctum_sm_signature+i));
 
   start_mcycle = read_csr(mcycle);
   hw_ed25519_sign(sanctum_sm_signature_hw, scratchpad_hw, 64 + 32, sanctum_dev_public_key, sanctum_dev_secret_key, 1);
   delta_mcycle = read_csr(mcycle) - start_mcycle;
-  delta_mcycle = delta_mcycle*tclk/1000; //at us
   uart_puts(uart, "\r\n\nHardware sign: ");
-  uart_put_dec(uart, delta_mcycle/1000000);
-  uart_puts(uart,"s ");
-  uart_put_dec(uart, (delta_mcycle%1000000)/1000);
-  uart_puts(uart,"ms ");
-  uart_put_dec(uart, delta_mcycle%1000);
-  uart_puts(uart,"us\r\n");
+  print_meas(delta_mcycle);
   for(int i = 0; i < 16; i++)
     uart_put_hex(uart, *((uint32_t*)sanctum_sm_signature_hw+i));
   uart_puts(uart,"\r\n\n");
@@ -753,8 +727,6 @@ void hwaes_test() {
   unsigned long start_mcycle;
   unsigned long delta_mcycle;
   void *uart = (void*)UART0_CTRL_ADDR;
-  unsigned long tclk = F_CLK; //at KHz
-  tclk = 1000000/tclk; //at ns
 
   // Vectors extracted from the tiny AES test.c file in AES128 mode
   uint8_t aeskey[] = { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
@@ -770,14 +742,8 @@ void hwaes_test() {
   AES_init_ctx(&ctx, aeskey);
   AES_ECB_encrypt(&ctx, aesin1);
   delta_mcycle = read_csr(mcycle) - start_mcycle;
-  delta_mcycle = delta_mcycle*tclk/1000; //at us
   uart_puts(uart, "Software: ");
-  uart_put_dec(uart, delta_mcycle/1000000);
-  uart_puts(uart,"s ");
-  uart_put_dec(uart, (delta_mcycle%1000000)/1000);
-  uart_puts(uart,"ms ");
-  uart_put_dec(uart, delta_mcycle%1000);
-  uart_puts(uart,"us\r\n");
+  print_meas(delta_mcycle);
   for(int i = 0; i < 4; i++)
     uart_put_hex(uart, *((uint32_t*)aesin1+i));
 
@@ -800,14 +766,8 @@ void hwaes_test() {
   for(int i = 0; i < 4; i++)
     *((uint32_t*)aesin2+i) = AES_REG(AES_REG_RESULT + i*4);
   delta_mcycle = read_csr(mcycle) - start_mcycle;
-  delta_mcycle = delta_mcycle*tclk/1000; //at us
   uart_puts(uart, "\r\n\nHardware: ");
-  uart_put_dec(uart, delta_mcycle/1000000);
-  uart_puts(uart,"s ");
-  uart_put_dec(uart, (delta_mcycle%1000000)/1000);
-  uart_puts(uart,"ms ");
-  uart_put_dec(uart, delta_mcycle%1000);
-  uart_puts(uart,"us\r\n");
+  print_meas(delta_mcycle);
   for(int i = 0; i < 4; i++)
     uart_put_hex(uart, *((uint32_t*)aesin2+i));
   uart_puts(uart,"\r\n\n");
