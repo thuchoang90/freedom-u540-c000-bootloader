@@ -26,12 +26,13 @@ CFLAGS=-I. -Ilib/ $(IUSB) -O2 -ggdb -march=rv64imafdc -mabi=lp64d -Wall -mcmodel
 CCASFLAGS=-I. -mcmodel=medany -mexplicit-relocs
 LDFLAGS=-nostdlib -nostartfiles
 
+ifeq ($(TEEHW),)
 dts := $(BUILD_DIR)/$(CONFIG_PROJECT).$(CONFIG).dts
 clk := $(BUILD_DIR)/$(CONFIG_PROJECT).$(CONFIG).tl_clock.h
-
-ifeq ($(TEEHW),)
 lds=memory_freedom.lds
 else
+dts := $(BUILD_DIR)/$(long_name).dts
+clk := $(BUILD_DIR)/$(long_name).tl_clock.h
 lds=memory_teehw.lds
 endif
 
