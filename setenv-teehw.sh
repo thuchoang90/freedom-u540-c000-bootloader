@@ -1,8 +1,7 @@
-export BOARD=vc707
-export CONFIG=ChipConfigVC707
-export CONFIG_PROJECT=uec.keystoneAcc.nedochip.NEDOFPGA
-export BUILD_DIR=../../fpga/vc707/generated-src/${CONFIG_PROJECT}.${CONFIG}
-export ROMGEN=../../hardware/vlsi_rom_gen_real
-export ROM_CONF_FILE=${BUILD_DIR}/${CONFIG_PROJECT}.${CONFIG}.rom.conf
-export ROM_FILE=${BUILD_DIR}/${CONFIG_PROJECT}.${CONFIG}.rom.v
+export BUILD_DIR=`pwd`/../../fpga/Xilinx/VC707/VC707.srcs/sources_2
+export long_name=FPGAVC707
+export BOARD=VC707
+export ROMGEN=`pwd`/../../hardware/vlsi_rom_gen_real
+export ROM_CONF_FILE=${BUILD_DIR}/${long_name}.rom.conf
+export ROM_FILE=${BUILD_DIR}/${long_name}.rom.v
 export TEEHW=1
