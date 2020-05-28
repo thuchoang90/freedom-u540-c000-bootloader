@@ -41,6 +41,7 @@
 #include "lib/aes/aes.h"
 #include <sifive/plic_driver.h>
 #include "usb/usbtest.h"
+#include <clkutils/clkutils.h>
 #endif
 
 #ifdef FPGA
@@ -575,12 +576,8 @@ void hwsha3_final(byte* hash, void* data, size_t size) {
   }
 }
 
-void print_meas (unsigned long meas) {
+void print_meas (uint32_t meas) {
   void *uart = (void*)UART0_CTRL_ADDR;
-  unsigned long tclk = F_CLK; //at KHz
-  tclk = 1000000/tclk; //at ns
-
-  meas = meas*tclk/1000; //at us
   uart_put_dec(uart, meas/1000000);
   uart_puts(uart,"s ");
   uart_put_dec(uart, (meas%1000000)/1000);
@@ -596,13 +593,13 @@ void hwsha3_test() {
   byte pad[128], swpad[64];
   uint32_t* hs = (uint32_t*)pad;
   sha3_ctx_t hash_ctx;
-  unsigned long start_mcycle;
-  unsigned long delta_mcycle;
+  uint64_t start_mcycle;
+  uint64_t delta_mcycle;
   void *uart = (void*)UART0_CTRL_ADDR;
 
   uart_puts(uart,"Begin SHA-3 hardware test:\r\n\n");
 
-  start_mcycle = read_csr(mcycle);
+  start_mcycle = clkutils_read_mtime();
   sha3_init(&hash_ctx, 64);
   sha3_update(&hash_ctx, (void*)DRAM_BASE, sanctum_sm_size);
   sha3_final(sanctum_sm_hash, &hash_ctx);
@@ -610,7 +607,7 @@ void hwsha3_test() {
   sha3_update(&hash_ctx, sanctum_dev_secret_key, sizeof(*sanctum_dev_secret_key));
   sha3_update(&hash_ctx, sanctum_sm_hash, sizeof(*sanctum_sm_hash));
   sha3_final(pad, &hash_ctx);
-  delta_mcycle = read_csr(mcycle) - start_mcycle;
+  delta_mcycle = clkutils_read_mtime() - start_mcycle;
   uart_puts(uart, "Software: ");
   print_meas(delta_mcycle);
   for(int i=16; i<32; i++)
@@ -619,13 +616,13 @@ void hwsha3_test() {
     swpad[i] = pad[i+64];
   uart_puts(uart,"\r\n\n");
 
-  start_mcycle = read_csr(mcycle);
+  start_mcycle = clkutils_read_mtime();
   hwsha3_init();
   hwsha3_final(sanctum_sm_hash, (void*)DRAM_BASE, sanctum_sm_size);
   hwsha3_init();
   hwsha3_update(sanctum_dev_secret_key, sizeof(*sanctum_dev_secret_key));
   hwsha3_final(pad, sanctum_sm_hash, sizeof(*sanctum_sm_hash));
-  delta_mcycle = read_csr(mcycle) - start_mcycle;
+  delta_mcycle = clkutils_read_mtime() - start_mcycle;
   uart_puts(uart, "Hardware: ");
   print_meas(delta_mcycle);
   for(int i=16; i<32; i++)
@@ -642,8 +639,8 @@ void hwsha3_test() {
 
 void hwed25519_test() {
   byte scratchpad[128], scratchpad_hw[128];
-  unsigned long start_mcycle;
-  unsigned long delta_mcycle;
+  uint64_t start_mcycle;
+  uint64_t delta_mcycle;
   void *uart = (void*)UART0_CTRL_ADDR;
   byte sanctum_sm_public_key_hw[32];
   byte sanctum_sm_secret_key_hw[64];
@@ -657,9 +654,9 @@ void hwed25519_test() {
     scratchpad_hw[i] = scratchpad[i];
   }
 
-  start_mcycle = read_csr(mcycle);
+  start_mcycle = clkutils_read_mtime();
   ed25519_create_keypair(sanctum_sm_public_key, sanctum_sm_secret_key, scratchpad);
-  delta_mcycle = read_csr(mcycle) - start_mcycle;
+  delta_mcycle = clkutils_read_mtime() - start_mcycle;
   uart_puts(uart, "Software gen key: ");
   print_meas(delta_mcycle);
   for(int i = 0; i < 8; i++)
@@ -668,9 +665,9 @@ void hwed25519_test() {
   for(int i = 0; i < 16; i++)
     uart_put_hex(uart, *((uint32_t*)sanctum_sm_secret_key+i));
 
-  start_mcycle = read_csr(mcycle);
+  start_mcycle = clkutils_read_mtime();
   hw_ed25519_create_keypair(sanctum_sm_public_key_hw, sanctum_sm_secret_key_hw, scratchpad_hw);
-  delta_mcycle = read_csr(mcycle) - start_mcycle;
+  delta_mcycle = clkutils_read_mtime() - start_mcycle;
   uart_puts(uart, "\r\n\nHardware gen key: ");
   print_meas(delta_mcycle);
   uart_puts(uart,"Public key: ");
@@ -685,17 +682,17 @@ void hwed25519_test() {
   memcpy(scratchpad_hw, sanctum_sm_hash, 64);
   memcpy(scratchpad_hw + 64, sanctum_sm_public_key_hw, 32);
 
-  start_mcycle = read_csr(mcycle);
+  start_mcycle = clkutils_read_mtime();
   ed25519_sign(sanctum_sm_signature, scratchpad, 64 + 32, sanctum_dev_public_key, sanctum_dev_secret_key);
-  delta_mcycle = read_csr(mcycle) - start_mcycle;
+  delta_mcycle = clkutils_read_mtime() - start_mcycle;
   uart_puts(uart, "\r\n\nSoftware sign: ");
   print_meas(delta_mcycle);
   for(int i = 0; i < 16; i++)
     uart_put_hex(uart, *((uint32_t*)sanctum_sm_signature+i));
 
-  start_mcycle = read_csr(mcycle);
+  start_mcycle = clkutils_read_mtime();
   hw_ed25519_sign(sanctum_sm_signature_hw, scratchpad_hw, 64 + 32, sanctum_dev_public_key, sanctum_dev_secret_key, 1);
-  delta_mcycle = read_csr(mcycle) - start_mcycle;
+  delta_mcycle = clkutils_read_mtime() - start_mcycle;
   uart_puts(uart, "\r\n\nHardware sign: ");
   print_meas(delta_mcycle);
   for(int i = 0; i < 16; i++)
@@ -724,8 +721,8 @@ void hwed25519_test() {
 }
 
 void hwaes_test() {
-  unsigned long start_mcycle;
-  unsigned long delta_mcycle;
+  uint64_t start_mcycle;
+  uint64_t delta_mcycle;
   void *uart = (void*)UART0_CTRL_ADDR;
 
   // Vectors extracted from the tiny AES test.c file in AES128 mode
@@ -738,17 +735,17 @@ void hwaes_test() {
   uart_puts(uart,"Begin AES hardware test:\r\n\n");
 
   // Software encrypt AES128
-  start_mcycle = read_csr(mcycle);
+  start_mcycle = clkutils_read_mtime();
   AES_init_ctx(&ctx, aeskey);
   AES_ECB_encrypt(&ctx, aesin1);
-  delta_mcycle = read_csr(mcycle) - start_mcycle;
+  delta_mcycle = clkutils_read_mtime() - start_mcycle;
   uart_puts(uart, "Software: ");
   print_meas(delta_mcycle);
   for(int i = 0; i < 4; i++)
     uart_put_hex(uart, *((uint32_t*)aesin1+i));
 
   // Hardware encrypt AES128
-  start_mcycle = read_csr(mcycle);
+  start_mcycle = clkutils_read_mtime();
   // Put the key (only 128 bits lower)
   for(int i = 0; i < 4; i++)
     AES_REG(AES_REG_KEY + i*4) = *((uint32_t*)aeskey+i);
@@ -765,7 +762,7 @@ void hwaes_test() {
   // Copy back the data to the pointer
   for(int i = 0; i < 4; i++)
     *((uint32_t*)aesin2+i) = AES_REG(AES_REG_RESULT + i*4);
-  delta_mcycle = read_csr(mcycle) - start_mcycle;
+  delta_mcycle = clkutils_read_mtime() - start_mcycle;
   uart_puts(uart, "\r\n\nHardware: ");
   print_meas(delta_mcycle);
   for(int i = 0; i < 4; i++)
