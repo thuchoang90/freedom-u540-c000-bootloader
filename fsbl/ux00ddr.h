@@ -75,9 +75,13 @@ static inline void ux00ddr_start(size_t ahbregaddr, size_t filteraddr, size_t dd
   while ((_REG32(132<<2, ahbregaddr) & (1<<MC_INIT_COMPLETE_OFFSET)) == 0) {}
 
   // Disable the BusBlocker in front of the controller AXI slave ports
-  volatile uint64_t *filterreg = (volatile uint64_t *)filteraddr;
+  volatile unsigned long *filterreg = (volatile unsigned long *)filteraddr;
+#if __riscv_xlen == 64
   filterreg[0] = 0x0f00000000000000UL | (ddrend >> 2);
   //                ^^ RWX + TOR
+#else
+  filterreg[0] = 0x0f000000UL | (ddrend >> 2);
+#endif
 }
 
 static inline void ux00ddr_mask_mc_init_complete_interrupt(size_t ahbregaddr) {
@@ -149,12 +153,12 @@ static inline uint32_t ux00ddr_getdramclass(size_t ahbregaddr) {
   return ((_REG32(0, ahbregaddr) >> DRAM_CLASS_OFFSET) & 0xF);
 }
 
-static inline uint64_t ux00ddr_phy_fixup(size_t ahbregaddr) {
+static inline unsigned long ux00ddr_phy_fixup(size_t ahbregaddr) {
   // return bitmask of failed lanes
 
   size_t ddrphyreg = ahbregaddr + 0x2000;
 
-  uint64_t fails=0;
+  unsigned long fails=0;
   uint32_t slicebase = 0;
   uint32_t dq = 0;
 

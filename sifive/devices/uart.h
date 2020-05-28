@@ -39,7 +39,7 @@ int puts(const char *s);
  * Get smallest clock divisor that divides input_hz to a quotient less than or
  * equal to max_target_hz;
  */
-static inline unsigned int uart_min_clk_divisor(uint64_t input_hz, uint64_t max_target_hz)
+static inline unsigned int uart_min_clk_divisor(unsigned long input_hz, unsigned long max_target_hz)
 {
   // f_baud = f_in / (div + 1) => div = (f_in / f_baud) - 1
   // div = (f_in / f_baud) - 1
@@ -52,7 +52,7 @@ static inline unsigned int uart_min_clk_divisor(uint64_t input_hz, uint64_t max_
   //
   // This should not overflow as long as (f_in - 1 + f_baud) does not exceed
   // 2^32 - 1, which is unlikely since we represent frequencies in kHz.
-  uint64_t quotient = (input_hz + max_target_hz - 1) / (max_target_hz);
+  unsigned long quotient = (input_hz + max_target_hz - 1) / (max_target_hz);
   // Avoid underflow
   if (quotient == 0) {
     return 0;

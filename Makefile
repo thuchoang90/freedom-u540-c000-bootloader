@@ -17,12 +17,25 @@ IUSB=-Iusb/
 TEEHW_FLAG=-DTEEHW
 endif
 
+ifeq ($(TEEHW),)
 CROSSCOMPILE?=riscv64-unknown-elf-
+CFLAGS_ARCH=-march=rv64imafdc -mabi=lp64d
+else ifeq ($(ISACONF),RV64GC)
+CROSSCOMPILE?=riscv64-unknown-elf-
+CFLAGS_ARCH=-march=rv64imafdc -mabi=lp64d
+else ifeq ($(ISACONF),RV32GC)
+CROSSCOMPILE?=riscv32-unknown-elf-
+CFLAGS_ARCH=-march=rv32imafdc -mabi=ilp32d
+else #RV32IMAC
+CROSSCOMPILE?=riscv32-unknown-elf-
+CFLAGS_ARCH=-march=rv32imac -mabi=ilp32
+endif
+
 CC=${CROSSCOMPILE}gcc
 LD=${CROSSCOMPILE}ld
 OBJCOPY=${CROSSCOMPILE}objcopy
 OBJDUMP=${CROSSCOMPILE}objdump
-CFLAGS=-I. -Ilib/ $(IUSB) -O2 -ggdb -march=rv64imafdc -mabi=lp64d -Wall -mcmodel=medany -mexplicit-relocs $(FPGA_FLAG) $(TEEHW_FLAG)
+CFLAGS=-I. -Ilib/ $(IUSB) -O2 -ggdb $(CFLAGS_ARCH) -Wall -mcmodel=medany -mexplicit-relocs $(FPGA_FLAG) $(TEEHW_FLAG)
 CCASFLAGS=-I. -mcmodel=medany -mexplicit-relocs
 LDFLAGS=-nostdlib -nostartfiles
 

@@ -41,6 +41,7 @@
 
 #define GPT_BLOCK_SIZE 512
 
+#if __riscv_xlen == 64
 // Bit fields of error codes
 #define ERROR_CODE_BOOTSTAGE (0xfUL << 60)
 #define ERROR_CODE_TRAP (0xfUL << 56)
@@ -48,6 +49,15 @@
 // Bit fields of mcause fields when compressed to fit into the errorcode field
 #define ERROR_CODE_ERRORCODE_MCAUSE_INT (0x1UL << 55)
 #define ERROR_CODE_ERRORCODE_MCAUSE_CAUSE ((0x1UL << 55) - 1)
+#else
+// Bit fields of error codes
+#define ERROR_CODE_BOOTSTAGE (0xfUL << 28)
+#define ERROR_CODE_TRAP (0xfUL << 24)
+#define ERROR_CODE_ERRORCODE ((0x1UL << 24) - 1)
+// Bit fields of mcause fields when compressed to fit into the errorcode field
+#define ERROR_CODE_ERRORCODE_MCAUSE_INT (0x1UL << 23)
+#define ERROR_CODE_ERRORCODE_MCAUSE_CAUSE ((0x1UL << 23) - 1)
+#endif
 
 #define ERROR_CODE_UNHANDLED_SPI_DEVICE 0x1
 #define ERROR_CODE_UNHANDLED_BOOT_ROUTINE 0x2
@@ -479,7 +489,7 @@ void ux00boot_fail(long code, int trap)
     // bootstage  trap     errorcode
     // If trap == 1, then errorcode is actually the mcause register with the
     // interrupt bit shifted to bit 55.
-    uint64_t error_code = 0;
+    unsigned long error_code = 0;
     if (trap) {
       error_code = INSERT_FIELD(error_code, ERROR_CODE_ERRORCODE_MCAUSE_CAUSE, code);
       if (code < 0) {
@@ -488,13 +498,15 @@ void ux00boot_fail(long code, int trap)
     } else {
       error_code = code;
     }
-    uint64_t formatted_code = 0;
+    unsigned long formatted_code = 0;
     formatted_code = INSERT_FIELD(formatted_code, ERROR_CODE_BOOTSTAGE, UX00BOOT_BOOT_STAGE);
     formatted_code = INSERT_FIELD(formatted_code, ERROR_CODE_TRAP, trap);
     formatted_code = INSERT_FIELD(formatted_code, ERROR_CODE_ERRORCODE, error_code);
 
     uart_puts((void*) UART0_CTRL_ADDR, "Error 0x");
+#if __riscv_xlen == 64
     uart_put_hex((void*) UART0_CTRL_ADDR, formatted_code >> 32);
+#endif
     uart_put_hex((void*) UART0_CTRL_ADDR, formatted_code);
   }
 

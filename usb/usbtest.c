@@ -178,10 +178,10 @@ void intr_disable() {
 }
 
 void intr_enable() {
-  volatile uint64_t * mtime       = (uint64_t*) (CLINT_CTRL_ADDR + CLINT_MTIME);
-  volatile uint64_t * mtimecmp    = (uint64_t*) (CLINT_CTRL_ADDR + CLINT_MTIMECMP);
-  uint64_t now = *mtime;
-  uint64_t then = now + 1000000; // 1 second
+  volatile unsigned long *mtime    = (unsigned long*)(CLINT_CTRL_ADDR + CLINT_MTIME);
+  volatile unsigned long *mtimecmp = (unsigned long*)(CLINT_CTRL_ADDR + CLINT_MTIMECMP);
+  unsigned long now = *mtime;
+  unsigned long then = now + 1000000; // 1 second
   *mtimecmp = then;
 
   set_csr(mstatus, MSTATUS_MIE);

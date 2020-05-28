@@ -65,7 +65,7 @@
 Barrier barrier = { {0, 0}, {0, 0}, 0}; // bss initialization is done by main core while others do wfi
 
 extern const gpt_guid gpt_guid_sifive_bare_metal;
-volatile uint64_t dtb_target;
+volatile unsigned long dtb_target;
 unsigned int serial_to_burn = ~0;
 
 uint32_t __attribute__((weak)) own_dtb = 42; // not 0xedfe0dd0 the DTB magic
@@ -118,10 +118,10 @@ void handle_m_time_interrupt() {
   // Reset the timer for 1s in the future.
   // This also clears the existing timer interrupt.
 
-  volatile uint64_t * mtime       = (uint64_t*) (CLINT_CTRL_ADDR + CLINT_MTIME);
-  volatile uint64_t * mtimecmp    = (uint64_t*) (CLINT_CTRL_ADDR + CLINT_MTIMECMP);
-  uint64_t now = *mtime;
-  uint64_t then = now + RTC_FREQ;
+  volatile unsigned long *mtime    = (unsigned long*)(CLINT_CTRL_ADDR + CLINT_MTIME);
+  volatile unsigned long *mtimecmp = (unsigned long*)(CLINT_CTRL_ADDR + CLINT_MTIMECMP);
+  unsigned long now = *mtime;
+  unsigned long then = now + RTC_FREQ;
   *mtimecmp = then;
 
   g_time_interrupt_handler();
@@ -337,8 +337,8 @@ int main(int id, unsigned long dtb)
   ux00ddr_mask_port_command_error_interrupt(UX00DDR_CTRL_ADDR);
 #endif
 
-  const uint64_t ddr_size = DDR_SIZE;
-  const uint64_t ddr_end = PAYLOAD_DEST + ddr_size;
+  const unsigned long ddr_size = DDR_SIZE;
+  const unsigned long ddr_end = PAYLOAD_DEST + ddr_size;
 #ifndef FPGA
   ux00ddr_start(UX00DDR_CTRL_ADDR, PHYSICAL_FILTER_CTRL_ADDR, ddr_end);
 
