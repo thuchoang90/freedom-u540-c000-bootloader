@@ -6,3 +6,7 @@
 *.bin
 *.asm
 lib/version.c
+tl_clock.h
+*.o
+*/*/*.o
+*.hex
