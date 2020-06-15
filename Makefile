@@ -17,17 +17,16 @@ IUSB=-Iusb/
 TEEHW_FLAG=-DTEEHW
 endif
 
-ifeq ($(TEEHW),)
 CROSSCOMPILE?=riscv64-unknown-elf-
+ifeq ($(TEEHW),)
 CFLAGS_ARCH=-march=rv64imafdc -mabi=lp64d
 else ifeq ($(ISACONF),RV64GC)
-CROSSCOMPILE?=riscv64-unknown-elf-
 CFLAGS_ARCH=-march=rv64imafdc -mabi=lp64d
+else ifeq ($(ISACONF),RV64IMAC)
+CFLAGS_ARCH=-march=rv64imac -mabi=lp64
 else ifeq ($(ISACONF),RV32GC)
-CROSSCOMPILE?=riscv32-unknown-elf-
 CFLAGS_ARCH=-march=rv32imafdc -mabi=ilp32d
 else #RV32IMAC
-CROSSCOMPILE?=riscv32-unknown-elf-
 CFLAGS_ARCH=-march=rv32imac -mabi=ilp32
 endif
 
