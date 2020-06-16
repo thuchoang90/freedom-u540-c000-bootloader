@@ -94,7 +94,7 @@ LIB_TEEHW=\
 endif
 
 
-H=$(wildcard *.h */*.h)
+H=$(wildcard *.h */*.h) tl_clock.h
 
 all: zsbl.bin fsbl.bin
 
@@ -106,8 +106,10 @@ else
 	$(ROMGEN) $(ROM_CONF_FILE) FPGAzsbl.hex > $(ROM_FILE)
 endif
 
-$(clk): $(dts)
+tl_clock.h: $(dts)
 	awk '/tlclk {/ && !f{f=1; next}; f && match($$0, /^.*clock-frequency.*<(.*)>.*/, arr) { print "#define TL_CLK " arr[1] "UL"}' $< > tl_clock.h
+
+$(clk): tl_clock.h
 	cp tl_clock.h $@
 
 elf: zsbl.elf fsbl.elf
@@ -155,7 +157,7 @@ else
 	dtc $(dts) -o $@ -O dtb
 endif
 
-%.o: %.S
+%.o: %.S $(H)
 ifeq ($(BOARD),)
 	$(CC) $(CFLAGS) $(CCASFLAGS) -c $< -o $@
 else
