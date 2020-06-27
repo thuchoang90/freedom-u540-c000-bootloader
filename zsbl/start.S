@@ -64,6 +64,9 @@ _start:
   bltu t0, t1, 1b
 2:
 #endif
+  // Save the dtb
+  la t0, _save_dtb
+  STORE a1, 0(t0)
 
   smp_resume(s1, s2)
 
@@ -75,17 +78,22 @@ _start:
 
   call main
 
+  // Load the entry point for the FSBL
+  // And also set a0 as the mhartid
+  // and the a1 as the dtb
   li t0, CCACHE_SIDEBAND_ADDR
   csrr a0, mhartid
-  la a1, _dtb
+  la t1, _save_dtb
+  LOAD a1, 0(t1)
   jr t0
 
   .align 2
 trap_entry:
   call handle_trap
 
-  .section .rodata
-_dtb:
-  .incbin "zsbl/ux00_zsbl.dtb"
+  .section .data
+_save_dtb:
+  .word 0x0
+  //.incbin "zsbl/ux00_zsbl.dtb"
   //.incbin DEVICE_TREE
 
