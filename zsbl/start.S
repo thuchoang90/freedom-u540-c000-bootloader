@@ -95,8 +95,8 @@ trap_entry:
 _save_dtb:
   .dword 0x0
 
-.section .rodata
-_dtb:
-  .incbin "zsbl/ux00_zsbl.dtb"
+//.section .rodata
+//_dtb:
+  //.incbin "zsbl/ux00_zsbl.dtb"
   //.incbin DEVICE_TREE
 
