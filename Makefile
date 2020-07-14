@@ -107,6 +107,9 @@ endif
 
 tl_clock.h: $(dts)
 	awk '/tlclk {/ && !f{f=1; next}; f && match($$0, /^.*clock-frequency.*<(.*)>.*/, arr) { print "#define TL_CLK " arr[1] "UL"}' $< > tl_clock.h
+ifneq ($(TEEHW),)
+	awk '/cpu@/{++cnt} END {print "#define NUM_CORES",cnt, "\n#define MAX_HART_ID",cnt*2}' $< >> tl_clock.h
+endif
 
 $(clk): tl_clock.h
 	cp tl_clock.h $@
