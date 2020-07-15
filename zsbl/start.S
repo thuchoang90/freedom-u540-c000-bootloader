@@ -5,6 +5,9 @@
 
 #include <sifive/bits.h>
 #include <sifive/smp.h>
+#ifdef TEEHW
+#include <tl_clock.h>
+#endif
 
   .section .text.init
   .globl _prog_start
@@ -78,6 +81,10 @@ _start:
   li t0, CCACHE_SIDEBAND_ADDR
   csrr a0, mhartid
   la a1, _dtb
+#ifdef TEEHW
+  li a2, TL_CLK
+  li a3, NUM_CORES
+#endif
   jr t0
 
   .align 2

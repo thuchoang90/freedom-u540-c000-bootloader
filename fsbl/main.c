@@ -160,8 +160,13 @@ void handle_trap(uintptr_t sp)
 }
 #endif
 
+#ifndef TEEHW
 int slave_main(int id, unsigned long dtb);
 void secure_boot_main();
+#else
+int slave_main(int id, unsigned long dtb, uint32_t num_cores);
+void secure_boot_main(unsigned long tl_clk);
+#endif
 
 /**
  * Scale peripheral clock dividers before changing core PLL.
@@ -214,7 +219,16 @@ int main(int id, unsigned long dtb)
   const uint32_t initial_core_clk_khz = 33000;
   unsigned long peripheral_input_khz;
 #else
+#ifdef TEEHW
+  unsigned long tl_clk, f_clk;
+  uint32_t num_cores;
+  asm volatile("mv %0, a2" : "=r" (tl_clk));
+  asm volatile("mv %0, a3" : "=r" (num_cores));
+  f_clk = tl_clk/1000;
+  unsigned long peripheral_input_khz = f_clk;
+#else
   unsigned long peripheral_input_khz = F_CLK;
+#endif
   asm volatile("mv %0, a1" : "=r" (dtb));
   dtb = (uintptr_t)dtb;
 #endif
@@ -436,6 +450,12 @@ int main(int id, unsigned long dtb)
   }
 #else
   puts("\r\nUsing ZSBL DTB");
+#ifdef TEEHW
+  puts("\r\nGot TL_CLK: ");
+  uart_put_dec((void*)UART0_CTRL_ADDR, tl_clk);
+  puts("\r\nGot NUM_CORES: ");
+  uart_put_dec((void*)UART0_CTRL_ADDR, num_cores);
+#endif
 #endif
 
   memcpy((void*)dtb_target, (void*)dtb, fdt_size(dtb));
@@ -506,12 +526,13 @@ int main(int id, unsigned long dtb)
 
 #ifndef TEEHW
   puts("\r\n\n");
-#else
-  puts("\r\n\n\nWelcome to TEE-HW Bootloader\r\n\n");
-#endif
-
   secure_boot_main();
   slave_main(0, dtb);
+#else
+  puts("\r\n\n\nWelcome to TEE-HW Bootloader\r\n\n");
+  secure_boot_main(tl_clk);
+  slave_main(0, dtb, num_cores);
+#endif
 
   //dead code
   return 0;
@@ -808,7 +829,11 @@ void hwrng_test() {
 }
 #endif
 
+#ifndef TEEHW
 void secure_boot_main(){
+#else
+void secure_boot_main(unsigned long tl_clk){
+#endif
   //*sanctum_sm_size = 0x200;
   // Reserve stack space for secrets
   byte scratchpad[128];
@@ -839,7 +864,7 @@ void secure_boot_main(){
           break;
         }
         delta_mcycle = read_csr(mcycle) - start_mcycle;
-      } while(delta_mcycle < TL_CLK);
+      } while(delta_mcycle < tl_clk);
       if(cod==255) uart_putc(uart,'\b');
       else break;
     }
@@ -959,8 +984,11 @@ void secure_boot_main(){
   HARTs 1..5 run slave_main
   slave_main is a weak symbol in crt.S
 */
-
+#ifndef TEEHW
 int slave_main(int id, unsigned long dtb)
+#else
+int slave_main(int id, unsigned long dtb, uint32_t num_cores)
+#endif
 {
   // Wait for the DTB location to become known
   while (!dtb_target) {}
@@ -975,7 +1003,11 @@ int slave_main(int id, unsigned long dtb)
   register unsigned long a1 asm("a1") = dtb_target;
 #endif
   // These next two guys must get inlined and not spill a0+a1 or it is broken!
+#ifndef TEEHW
   Barrier_Wait(&barrier, NUM_CORES);
+#else
+  Barrier_Wait(&barrier, num_cores);
+#endif
 #ifndef FPGA
   ccache_enable_ways(CCACHE_CTRL_ADDR,14);
 #endif

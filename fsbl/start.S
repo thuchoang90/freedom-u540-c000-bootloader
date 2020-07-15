@@ -36,8 +36,11 @@ _start:
 // save a0 and a1; arguments from previous boot loader stage:
 //  li  x10, 0
 //  li  x11, 0
+#ifndef TEEHW
+// if TEEHW: save a2 and a3 too; TL_CLK & NUM_CORES are in there
   li  x12, 0
   li  x13, 0
+#endif
   li  x14, 0
   li  x15, 0
   li  x16, 0
